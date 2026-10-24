@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รายงาน · Smart Chicken Farm</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d71f26'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle'%3E%F0%9F%90%94%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body class="page-reports">
+<div class="app">
+<aside class="side" id="side"></aside>
+<div class="content">
+<main>
+  <div class="title"><div><h2>รายงาน</h2><span id="rSub">ข้อมูลย้อนหลังของฟาร์ม · อัปเดตเองเมื่อมีค่าใหม่</span></div></div>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button role="tab" data-tab="chart"><i data-ic="chart"></i>กราฟและสถิติ</button>
+    <button role="tab" data-tab="readings"><i data-ic="list"></i>ค่าที่วัดได้</button>
+    <button role="tab" data-tab="lights"><i data-ic="bulb"></i>การเปิด-ปิดไฟ</button>
+    <button role="tab" data-tab="alerts"><i data-ic="bell"></i>การแจ้งเตือน</button>
+  </nav>
+  <section class="tab-panel" data-panel="chart" hidden><div id="chartPanel"></div></section>
+  <section class="tab-panel" data-panel="readings" hidden><div id="tblPanel"></div></section>
+  <section class="tab-panel" data-panel="lights" hidden><div class="evsum" id="evSum"></div><div id="evPanel"></div></section>
+  <section class="tab-panel" data-panel="alerts" hidden>
+    <div class="panel">
+      <div class="tools"><span id="aCoop"></span><div class="seg" id="aDays"></div><span class="hint push" id="aCount"></span></div>
+      <div class="scroll"><table>
+        <thead><tr><th>เวลา</th><th>โรงเรือน</th><th>ประเภท</th><th>รายละเอียด</th></tr></thead>
+        <tbody id="aBody"><tr><td colspan="4" class="empty">กำลังโหลด...</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+</main>
+<footer id="footer"></footer>
+</div>
+</div>
+<script type="module" src="js/pages/reports.js"></script>
+</body>
+</html>

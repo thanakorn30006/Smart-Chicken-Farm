@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ภาพรวมฟาร์ม · Smart Chicken Farm</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d71f26'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle'%3E%F0%9F%90%94%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body class="page-dashboard">
+<div class="app">
+<aside class="side" id="side"></aside>
+<div class="content">
+<main>
+  <div class="title hello">
+    <div><h2 id="hello">สวัสดี</h2><span id="today2"></span></div>
+    <div class="title-actions">
+      <button class="btn off-all" id="allOff" hidden><i data-ic="power"></i>ปิดไฟทั้งหมด<span class="count" id="allOffN"></span></button></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><span><i data-ic="hen"></i>ไก่ในฟาร์ม</span><b id="sBirds">–</b><small id="sBirdsSub"></small></div>
+    <div class="stat"><span><i data-ic="wifi"></i>โรงเรือนออนไลน์</span><b id="sOnline">–</b><small>อัปเดตสดผ่าน WebSocket</small></div>
+    <div class="stat"><span><i data-ic="bulb"></i>ไฟที่เปิดอยู่</span><b id="sLight">–</b><small id="sAuto"></small></div>
+    <div class="stat"><span><i data-ic="bell"></i>แจ้งเตือนวันนี้</span><b id="sAlerts">–</b><small><a href="reports.html#alerts">ดูทั้งหมด</a></small></div>
+  </div>
+  <div class="section-head"><h3>โรงเรือน</h3><span class="hint" id="coopCount"></span></div>
+  <div class="grid" id="cards"></div>
+  <div class="dash-bottom">
+    <div class="todo" id="todo" role="status"></div>
+    <div class="panel recent-panel">
+      <div class="panel-head"><h3>แจ้งเตือนล่าสุด</h3><a class="link" href="reports.html#alerts">ดูทั้งหมด <i data-ic="arrow"></i></a></div>
+      <div id="recent"><div class="empty">กำลังโหลด...</div></div>
+    </div>
+  </div>
+</main>
+<footer id="footer"></footer>
+</div>
+</div>
+<script type="module" src="js/pages/dashboard.js"></script>
+</body>
+</html>

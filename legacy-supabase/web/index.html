@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Chicken Farm</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23a63d2a'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle'%3E%F0%9F%90%94%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f7f2e8; --card:#fffdf8; --text:#3a2e24; --mute:#8a7a68; --line:#e8dcc6;
+    --barn:#a63d2a; --straw:#e9c46a; --egg:#f6d55c;
+    --temp:#d1603d; --hum:#2f7fa8; --ok:#3f7d3a; --ok-bg:#e5f0dc;
+    --warn:#b5651d; --warn-bg:#fbe9d3; --cold:#2f6f9a; --cold-bg:#ddeef8; --off:#b4a896;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1c1814; --card:#26201b; --text:#f1e9dc; --mute:#a8998a; --line:#3a3129;
+            --ok-bg:#24361f; --warn-bg:#3d2a17; --cold-bg:#1b2f3c; }
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 "Sarabun", system-ui, sans-serif; }
+  h1, h2, h3 { font-family:"Kanit", "Sarabun", sans-serif; }
+  .ic { width:20px; height:20px; flex:none; }
+
+  .app { display:grid; grid-template-columns:240px minmax(0,1fr); min-height:100vh; }
+  .side { position:sticky; top:0; height:100vh; display:flex; flex-direction:column; padding:18px 12px;
+          background:var(--barn); color:#fff; border-right:4px solid var(--straw); }
+  .brand { display:flex; align-items:center; gap:10px; padding:2px 6px 18px; margin-bottom:12px; border-bottom:1px solid rgba(255,255,255,.2); }
+  .logo { width:46px; height:46px; border-radius:50%; background:#fff8e6; display:grid; place-items:center; flex:none; }
+  .logo svg { width:34px; height:34px; }
+  .brand h1 { margin:0; font-size:18px; font-weight:600; line-height:1.25; }
+  .brand p { margin:2px 0 0; font-size:12px; line-height:1.4; opacity:.85; }
+  .side nav { display:flex; flex-direction:column; gap:4px; }
+  .side nav a { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px;
+                color:rgba(255,255,255,.88); text-decoration:none; font-weight:500; }
+  .side nav a:hover { background:rgba(255,255,255,.12); color:#fff; }
+  .side nav a.act { background:#fff8e6; color:var(--barn); }
+  .side nav .ic { width:19px; height:19px; }
+  .navlabel { padding:12px 12px 2px; font-size:11px; letter-spacing:.6px; opacity:.65; }
+  .hgrid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.35fr); gap:14px; align-items:start; margin-bottom:14px; }
+  .hgrid .panel { height:100%; }
+  .hgrid > * { min-width:0; }
+  .hgrid.top { align-items:stretch; }
+  .card.big { display:flex; flex-direction:column; height:100%; }
+  .card.big .art { flex:1; min-height:220px; display:flex; }
+  .card.big .art svg { height:100%; }
+  section[data-page="house"] .col-house, section[data-page="house"] .sv .txt,
+  section[data-page="house"] #tblPanel .tools, section[data-page="house"] #evPanel .tools { display:none; }
+  section[data-page="house"] .scroll { max-height:430px; }
+  #evPanel th:not(:last-child), #evPanel td:not(:last-child) { width:150px; }
+  h3.sub { margin:4px 0 8px; font-size:16px; font-weight:500; }
+  .card.big .m b { font-size:32px; }
+  .card.big .card-head h3 { font-size:19px; }
+  .clock { margin-top:auto; padding:14px 8px 0; border-top:1px solid rgba(255,255,255,.2); font-size:12px; opacity:.9; }
+  .clock b { display:block; font:500 22px "Kanit", sans-serif; }
+
+  main { max-width:1100px; margin:0 auto; padding:6px 20px 8px; }
+  .title { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin:20px 0 12px; }
+  .title h2 { margin:0; font-size:20px; font-weight:500; }
+  .title span { font-size:13px; color:var(--mute); }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+  .stat .ic { width:30px; height:30px; }
+  .stat span { display:block; font-size:12px; color:var(--mute); }
+  .stat b { font:500 24px/1.2 "Kanit", sans-serif; }
+
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .card-head { display:flex; align-items:center; padding:10px 14px; }
+  .card-head h3 { margin:0; font-size:17px; font-weight:500; }
+  .chip { margin-left:auto; font-size:12px; padding:2px 10px; border-radius:99px; display:inline-flex; align-items:center; gap:5px; background:var(--line); color:var(--mute); }
+  .chip::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .card.online .chip { background:var(--ok-bg); color:var(--ok); }
+
+  .art { display:block; cursor:pointer; }
+  .art svg { display:block; width:100%; height:auto; }
+  .card:not(.online) .art svg { filter:grayscale(.75) opacity(.75); }
+  .shade { fill:#0d0c14; opacity:.62; transition:opacity .6s; }
+  .card.lit .shade { opacity:.03; }
+  .warm { fill:#ffcf73; opacity:0; transition:opacity .6s; mix-blend-mode:soft-light; }
+  .card.lit .warm { opacity:.55; }
+  .glow, .bulb-on { opacity:0; transition:opacity .6s; }
+  .card.lit .glow, .card.lit .bulb-on { opacity:1; }
+
+  .meas { display:grid; grid-template-columns:1fr 1fr auto; align-items:center; gap:10px; padding:12px 14px 4px; }
+  .m { display:flex; align-items:center; gap:6px; }
+  .m .ic { width:28px; height:28px; }
+  .m b { font:500 26px/1 "Kanit", sans-serif; }
+  .m small { font-size:14px; color:var(--mute); }
+  .mc { min-width:0; } .mc.t { color:var(--temp); } .mc.h { color:var(--hum); } .mc b { color:var(--text); }
+  .spark { display:block; width:100%; height:26px; margin-top:6px; overflow:visible; }
+  .spark .line { fill:none; stroke:currentColor; stroke-width:1.6; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+  .spark .area { fill:currentColor; opacity:.12; }
+  .badge { width:42px; height:42px; border-radius:50%; display:grid; place-items:center; background:var(--line); color:var(--mute); }
+  .badge .ic { width:24px; height:24px; }
+  .badge.sm { width:28px; height:28px; } .badge.sm .ic { width:16px; height:16px; }
+  .badge.ok { background:var(--ok-bg); color:var(--ok); }
+  .badge.hot, .badge.dry { background:var(--warn-bg); color:var(--warn); }
+  .badge.cold, .badge.wet { background:var(--cold-bg); color:var(--cold); }
+  .light { display:flex; align-items:center; gap:10px; margin:10px 14px 14px; padding-top:10px; border-top:1px dashed var(--line); }
+  .light .ic { width:24px; height:24px; color:var(--off); }
+  .card.lit .light .ic { color:#e0a800; }
+  .light small { font-size:12px; color:var(--mute); }
+  .switch { margin-left:auto; width:52px; height:28px; border-radius:14px; border:0; background:var(--off); position:relative; cursor:pointer; flex:none; }
+  .switch::after { content:""; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:transform .2s; }
+  .card.lit .switch { background:var(--barn); }
+  .card.lit .switch::after { transform:translateX(24px); }
+  .switch:disabled { opacity:.5; cursor:wait; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:16px; padding:12px 16px; font-size:13px; color:var(--mute); }
+  .legend span { display:inline-flex; align-items:center; gap:6px; }
+  .legend .ic { width:18px; height:18px; }
+
+  .tools { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button { border:0; background:transparent; color:var(--text); padding:6px 14px; font:inherit; font-size:14px; cursor:pointer; }
+  .seg button + button { border-left:1px solid var(--line); }
+  .seg button.act { background:var(--barn); color:#fff; }
+  .keys { margin-left:auto; font-size:13px; color:var(--mute); display:flex; gap:14px; }
+  .keys i { display:inline-block; width:12px; height:3px; border-radius:2px; margin-right:5px; vertical-align:middle; }
+  canvas { width:100%; height:320px; display:block; }
+  .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); }
+  .summary div { font-size:12px; color:var(--mute); }
+  .summary b { display:block; font:500 18px "Kanit", sans-serif; color:var(--text); }
+  .summary small { font-size:11px; }
+
+  .scroll { max-height:560px; overflow:auto; border:1px solid var(--line); border-radius:10px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { position:sticky; top:0; background:var(--bg); text-align:left; font-weight:600; color:var(--mute); font-size:13px; padding:9px 12px; border-bottom:1px solid var(--line); }
+  td { padding:7px 12px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th.n, td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  tr.bad td { background:var(--warn-bg); }
+  td .sv { display:inline-flex; align-items:center; gap:8px; }
+  .more { display:block; width:100%; margin-top:10px; padding:8px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--text); font:inherit; cursor:pointer; }
+  .evsum { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; margin-bottom:14px; }
+  .evs { display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--card); border:1px solid var(--line); border-radius:12px; }
+  .evs .ic { width:32px; height:32px; color:var(--off); }
+  .evs.on { border-color:#ecd37a; }
+  .evs.on .ic { color:#e0a800; }
+  .evs b { display:block; font-weight:600; }
+  .evs span { display:block; font-size:14px; }
+  .evs.on span { color:#8a6500; }
+  .evs small { font-size:12px; color:var(--mute); }
+  tr.day td { background:var(--bg); color:var(--mute); font-size:13px; font-weight:600; padding:6px 12px; }
+  .tag { font-size:12px; padding:1px 9px; border-radius:99px; }
+  .tag.on { background:#fff1bf; color:#8a6500; }
+  .empty { color:var(--mute); font-size:14px; padding:14px 4px; }
+  .status { display:flex; align-items:center; gap:7px; margin-bottom:10px; font-size:12px; line-height:1.4; }
+  .status::before { content:""; width:8px; height:8px; border-radius:50%; background:#7ddc6f; flex:none; }
+  .status.err::before { background:#ffb4a2; }
+  .status.err { color:#ffd9cf; }
+  .card, .stat, .panel { box-shadow:0 1px 2px rgba(58,46,36,.05); }
+  .card { border-top:4px solid var(--off); transition:box-shadow .2s, transform .2s; }
+  .card:hover { box-shadow:0 8px 22px rgba(58,46,36,.12); transform:translateY(-2px); }
+  .card[data-s="ok"] { border-top-color:var(--ok); }
+  .card[data-s="hot"], .card[data-s="dry"] { border-top-color:var(--warn); }
+  .card[data-s="cold"], .card[data-s="wet"] { border-top-color:var(--cold); }
+
+  .alert { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; margin-bottom:16px; border-radius:12px; border:1px solid transparent; }
+  .alert .ic { width:22px; height:22px; margin-top:1px; }
+  .alert b { display:block; font-weight:600; }
+  .alert div { font-size:14px; }
+  .alert ul { margin:2px 0 0; padding-left:18px; }
+  .alert.ok { background:var(--ok-bg); color:var(--ok); border-color:rgba(63,125,58,.25); }
+  .alert.warn { background:var(--warn-bg); color:var(--warn); border-color:rgba(181,101,29,.3); }
+
+  .chartbox { position:relative; }
+  .cursor { position:absolute; top:12px; width:1px; background:var(--mute); opacity:.6; pointer-events:none; }
+  .dot { position:absolute; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%; border:2px solid var(--card); pointer-events:none; }
+  .tip { position:absolute; top:8px; padding:8px 11px; border-radius:8px; background:#2b221b; color:#fff; font-size:12px; line-height:1.6;
+         white-space:nowrap; pointer-events:none; box-shadow:0 6px 16px rgba(0,0,0,.22); }
+  .tip b { font-weight:600; }
+  .tip i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+
+  .toast { position:fixed; right:20px; bottom:20px; z-index:20; display:flex; align-items:center; gap:10px; padding:12px 16px;
+           border-radius:10px; background:#2b221b; color:#fff; font-size:14px; box-shadow:0 10px 24px rgba(0,0,0,.25);
+           opacity:0; transform:translateY(16px); transition:opacity .25s, transform .25s; pointer-events:none; }
+  .toast.show { opacity:1; transform:none; }
+  .toast.err { background:var(--temp); }
+  .toast .ic { width:20px; height:20px; color:var(--egg); }
+  footer { max-width:1100px; margin:0 auto; padding:14px 16px 26px; font-size:12px; color:var(--mute); display:flex; flex-wrap:wrap; gap:6px 16px; justify-content:space-between; }
+  @media (max-width:860px) {
+    .app { grid-template-columns:minmax(0,1fr); }
+    .side { position:static; height:auto; padding:12px 12px 8px; border-right:0; border-bottom:4px solid var(--straw); }
+    .brand { padding:0 4px 10px; margin-bottom:8px; }
+    .side nav { flex-direction:row; overflow-x:auto; }
+    .side nav a { white-space:nowrap; padding:8px 12px; }
+    .navlabel { display:none; }
+    .hgrid { grid-template-columns:minmax(0,1fr); }
+    .clock { margin-top:6px; padding:0 4px; border-top:0; }
+    .clock b, .clock > span { display:none; }
+    .status { margin-bottom:0; }
+    main { padding:6px 16px 8px; }
+  }
+  @media (max-width:560px) { .keys { margin-left:0; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gCeil" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#454b51"/><stop offset="1" stop-color="#737a80"/></linearGradient>
+    <linearGradient id="gWallL" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6c7479"/><stop offset="1" stop-color="#a3abb0"/></linearGradient>
+    <linearGradient id="gWallR" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#6c7479"/><stop offset="1" stop-color="#a3abb0"/></linearGradient>
+    <linearGradient id="gFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a7350"/><stop offset="1" stop-color="#cdb07c"/></linearGradient>
+    <linearGradient id="gHen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dcd6ca"/></linearGradient>
+    <radialGradient id="gGlow"><stop offset="0" stop-color="#fff3c4" stop-opacity=".95"/>
+      <stop offset=".35" stop-color="#ffd36b" stop-opacity=".35"/><stop offset="1" stop-color="#ffd36b" stop-opacity="0"/></radialGradient>
+  </defs>
+</svg>
+<div class="app">
+<aside class="side">
+  <div class="brand">
+    <div class="logo">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M24 14c2-6 6-6 7-2 2-5 7-4 7 1 4-2 6 2 3 5H24z" fill="#d23b2a"/>
+        <ellipse cx="34" cy="40" rx="20" ry="16" fill="#f4e7cf" stroke="#7f2c1d" stroke-width="2"/>
+        <circle cx="30" cy="24" r="10" fill="#f4e7cf" stroke="#7f2c1d" stroke-width="2"/>
+        <path d="M20 23l-7 3 7 3z" fill="#e9a23b"/>
+        <circle cx="27" cy="22" r="1.8" fill="#3a2e24"/>
+        <path d="M26 30c-2 3-1 6 1 6" fill="none" stroke="#d23b2a" stroke-width="3" stroke-linecap="round"/>
+        <path d="M38 38c6-2 10 0 12 4" fill="none" stroke="#7f2c1d" stroke-width="2" stroke-linecap="round"/>
+        <path d="M30 56v5m-3 0h6M40 56v5m-3 0h6" stroke="#e9a23b" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Smart Chicken Farm</h1>
+      <p>ระบบติดตามและควบคุมโรงเรือนไก่อัจฉริยะ</p>
+    </div>
+  </div>
+  <nav>
+    <a href="#home" data-page="home"><i data-ic="home"></i>แดชบอร์ด</a>
+    <div class="navlabel">โรงเรือน</div>
+    <a href="#house1"><i data-ic="barn"></i>โรงเรือนที่ 1</a>
+    <a href="#house2"><i data-ic="barn"></i>โรงเรือนที่ 2</a>
+    <a href="#house3"><i data-ic="barn"></i>โรงเรือนที่ 3</a>
+    <div class="navlabel">ข้อมูลรวม</div>
+    <a href="#chart" data-page="chart"><i data-ic="chart"></i>กราฟและสถิติ</a>
+    <a href="#history" data-page="history"><i data-ic="list"></i>ประวัติการวัดค่า</a>
+    <a href="#lights" data-page="lights"><i data-ic="bulb"></i>ประวัติการเปิด-ปิดไฟ</a>
+  </nav>
+  <div class="clock">
+    <div class="status" id="upd">กำลังเชื่อมต่อ...</div>
+    <b id="clock">--:--:--</b><span id="today"></span>
+  </div>
+</aside>
+
+<div class="content">
+<main>
+  <section data-page="home">
+    <div class="title"><h2>แดชบอร์ด</h2><span>สถานะปัจจุบันของทุกโรงเรือน · แตะภาพโรงเรือนเพื่อดูกราฟ</span></div>
+    <div class="alert" id="alert" role="status" hidden></div>
+    <div class="stats">
+      <div class="stat"><i data-ic="wifi" style="color:var(--ok)"></i><div><span>โรงเรือนออนไลน์</span><b id="sOnline">–</b></div></div>
+      <div class="stat"><i data-ic="thermo" style="color:var(--temp)"></i><div><span>อุณหภูมิเฉลี่ย</span><b id="sTemp">–</b></div></div>
+      <div class="stat"><i data-ic="drop" style="color:var(--hum)"></i><div><span>ความชื้นเฉลี่ย</span><b id="sHum">–</b></div></div>
+      <div class="stat"><i data-ic="bulb" style="color:#e0a800"></i><div><span>ไฟที่เปิดอยู่</span><b id="sLight">–</b></div></div>
+    </div>
+    <div class="grid" id="cards"></div>
+    <div class="panel legend">
+      <span><i data-ic="thermo" style="color:var(--temp)"></i>อุณหภูมิ (°C)</span>
+      <span><i data-ic="drop" style="color:var(--hum)"></i>ความชื้นสัมพัทธ์ (%)</span>
+      <span><b class="badge sm ok"><i data-ic="check"></i></b>เหมาะสม</span>
+      <span><b class="badge sm hot"><i data-ic="flame"></i></b>ร้อนเกินเกณฑ์</span>
+      <span><b class="badge sm cold"><i data-ic="snow"></i></b>เย็นเกินเกณฑ์</span>
+      <span><b class="badge sm wet"><i data-ic="wet"></i></b>ชื้นเกินเกณฑ์</span>
+      <span><b class="badge sm dry"><i data-ic="dry"></i></b>แห้งเกินเกณฑ์</span>
+      <span><b class="badge sm"><i data-ic="wifiOff"></i></b>ออฟไลน์</span>
+    </div>
+  </section>
+
+  <section data-page="house" hidden>
+    <div class="title"><h2 id="hTitle">โรงเรือน</h2><span>สถานะ การควบคุมไฟ และประวัติของโรงเรือนนี้</span></div>
+    <div class="hgrid top">
+      <div id="hCard"></div>
+      <div id="hChart"></div>
+    </div>
+    <div class="hgrid">
+      <div><h3 class="sub">ประวัติการวัดค่า</h3><div id="hTable"></div></div>
+      <div><h3 class="sub">ประวัติการเปิด-ปิดไฟ</h3><div id="hEvents"></div></div>
+    </div>
+  </section>
+
+  <section data-page="chart" hidden>
+    <div class="title"><h2>กราฟและสถิติ</h2><span>อุณหภูมิและความชื้นตามช่วงเวลา</span></div>
+    <div class="panel" id="chartPanel">
+      <div class="tools">
+        <div class="seg" id="houseSeg">
+          <button data-h="1" class="act">โรงเรือน 1</button><button data-h="2">โรงเรือน 2</button><button data-h="3">โรงเรือน 3</button>
+        </div>
+        <div class="seg" id="rangeSeg">
+          <button data-m="15">15 นาที</button><button data-m="60" class="act">1 ชม.</button><button data-m="360">6 ชม.</button><button data-m="1440">24 ชม.</button>
+        </div>
+        <div class="keys"><span><i style="background:var(--temp)"></i>อุณหภูมิ (°C)</span><span><i style="background:var(--hum)"></i>ความชื้น (%)</span></div>
+      </div>
+      <div class="chartbox" id="chartbox">
+        <canvas id="chart"></canvas>
+        <div class="cursor" id="cur" hidden></div>
+        <div class="dot" id="dotT" style="background:var(--temp)" hidden></div>
+        <div class="dot" id="dotH" style="background:var(--hum)" hidden></div>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+      <div class="summary" id="summary"></div>
+    </div>
+  </section>
+
+  <section data-page="history" hidden>
+    <div class="title"><h2>ประวัติการวัดค่า</h2><span id="tblCount"></span></div>
+    <div class="panel" id="tblPanel">
+      <div class="tools">
+        <div class="seg" id="tblSeg">
+          <button data-h="0" class="act">ทุกโรงเรือน</button><button data-h="1">โรงเรือน 1</button><button data-h="2">โรงเรือน 2</button><button data-h="3">โรงเรือน 3</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>วัน-เวลา</th><th class="col-house">โรงเรือน</th><th class="n">อุณหภูมิ</th><th class="n">ความชื้น</th><th>สภาพแวดล้อม</th></tr></thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+      <button class="more" id="more">ดูเพิ่ม 50 รายการ</button>
+    </div>
+  </section>
+
+  <section data-page="lights" hidden>
+    <div class="title"><h2>ประวัติการเปิด-ปิดไฟ</h2><span>7 วันล่าสุด · 1 แถว = เปิดไฟ 1 รอบ</span></div>
+    <div class="evsum" id="evSum"></div>
+    <div class="panel" id="evPanel">
+      <div class="tools">
+        <div class="seg" id="evSeg">
+          <button data-h="0" class="act">ทุกโรงเรือน</button><button data-h="1">โรงเรือน 1</button><button data-h="2">โรงเรือน 2</button><button data-h="3">โรงเรือน 3</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th class="col-house">โรงเรือน</th><th>เปิดไฟ</th><th>ปิดไฟ</th><th>เปิดนาน</th></tr></thead>
+          <tbody id="events"><tr><td class="empty" colspan="4">กำลังโหลด...</td></tr></tbody>
+        </table>
+      </div>
+      <button class="more" id="evMore" hidden>ดูเพิ่ม</button>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <span>Smart Chicken Farm · Mini Project 2569</span>
+  <span>ESP32 + SHT31 · ESP-NOW · Supabase</span>
+</footer>
+</div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="config.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const HOUSES = [1, 2, 3];
+const ONLINE_MS = 30000;      // no reading for 30 s -> offline
+const MAX_POINTS = 1000;      // Supabase returns at most 1000 rows per request
+// Comfort range for the chickens; change here for the special problem.
+const TEMP_MIN = 18, TEMP_MAX = 30, HUM_MIN = 50, HUM_MAX = 70;
+const PAGES = ["home", "chart", "history", "lights"];
+const PAGE = 50;              // history table grows by this many rows per "ดูเพิ่ม"
+let page = "home", selected = 1, minutes = 60;
+let tblHouse = 0, tblLimit = PAGE;   // tblHouse 0 = all houses
+const EV_PAGE = 15;           // light history rows shown per "ดูเพิ่ม"
+let evHouse = 0, evLimit = EV_PAGE, lastData = [];
+
+const ICONS = {
+  home: '<path d="M3 11l9-7 9 7M5 10v10h14V10"/>',
+  barn: '<path d="M3 20V10l9-6 9 6v10z"/><path d="M9 20v-6h6v6M9 14l6 6M15 14l-6 6"/>',
+  chart: '<path d="M3 3v18h18M7 15l4-4 3 3 6-6"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+  thermo: '<path d="M14 14.76V5a2 2 0 1 0-4 0v9.76a4 4 0 1 0 4 0z"/><path d="M12 9v7"/>',
+  drop: '<path d="M12 3.5s6 6.4 6 10.6a6 6 0 0 1-12 0C6 9.9 12 3.5 12 3.5z"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  flame: '<path d="M12 3c.8 3 4.5 4.8 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1.1-3.6 2.3-4.6.1 1.8.9 3 2.2 3.4C11.6 9 11 6 12 3z"/>',
+  snow: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5"/>',
+  wet: '<path d="M12 3.5s6 6.4 6 10.6a6 6 0 0 1-12 0C6 9.9 12 3.5 12 3.5z"/><path d="M12 11v6M9 14h6"/>',
+  dry: '<path d="M12 3.5s6 6.4 6 10.6a6 6 0 0 1-12 0C6 9.9 12 3.5 12 3.5z"/><path d="M4 4l16 16"/>',
+  wifi: '<path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M2 9a15 15 0 0 1 20 0M12 20h.01"/>',
+  alert: '<path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.5h.01"/>',
+  wifiOff: '<path d="M3 3l18 18M8.5 16a5 5 0 0 1 7 0M5 12.5a10 10 0 0 1 4.5-2.6M14.5 9.9A10 10 0 0 1 19 12.5M2 9a15 15 0 0 1 4-2.6M12 20h.01"/>',
+};
+const ic = name => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+document.querySelectorAll("i[data-ic]").forEach(el => el.outerHTML = ic(el.dataset.ic));
+
+// Inside of a closed broiler house in perspective. A point is (xn across, yn top->bottom, t depth);
+// t = 0 is the front opening, t = 1 the back wall with the exhaust fans.
+const lerp = (a, b, t) => a + (b - a) * t;
+const P = (xn, yn, t) => [lerp(lerp(-60, 360, xn), lerp(115, 185, xn), t), lerp(lerp(-20, 200, yn), lerp(58, 92, yn), t)];
+const depth = d => d / (d + 1);          // spacing that shrinks with distance
+const S = t => 1 - 0.833 * t;            // size factor at depth t
+const pts = (...ps) => ps.map(p => p.map(v => v.toFixed(1)).join(",")).join(" ");
+const ln = (a, b, attrs) => `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" ${attrs}/>`;
+const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;   // same layout on every load
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// One broiler facing right with its feet at (0,0): it shuffles sideways and dips its head to peck.
+const hen = (begin, dur, dx) => `<g>
+  <animateTransform attributeName="transform" type="translate" values="0 0;${dx} 0;${dx} 0;0 0" keyTimes="0;.4;.6;1"
+    dur="${(dur * 3).toFixed(1)}s" begin="${begin}s" repeatCount="indefinite"/>
+  <ellipse rx="9" ry="1.8" fill="#000" opacity=".22"/>
+  <path d="M-8.5-6C-9.5-12-3.5-15 2.5-13.2 6-12 8-9.3 8-6.3 8-2.2 3.5-.3-2-.3-6.8-.3-8.7-3-8.5-6Z" fill="url(#gHen)"/>
+  <path d="M-7.5-8.5C-11.5-12.5-12-6.5-8.6-5.2Z" fill="#ece8df"/>
+  <path d="M-5-8.2C-2-10.4 3-9.6 4.3-6.4 1-4.4-3.2-4.6-5-8.2Z" fill="#d9d3c7"/>
+  <g><animateTransform attributeName="transform" type="rotate" values="0 4.5 -10;0 4.5 -10;38 4.5 -10;0 4.5 -10"
+      keyTimes="0;.6;.75;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/>
+    <path d="M3-9.5C3.5-13 5-16.5 7.4-16.8 9.6-17 10.6-15 10.2-13.2 9.6-11.2 7-9.6 5.5-8.8Z" fill="#f6f4ee"/>
+    <path d="M6-17.2q.9-2 1.9-.2q1-1.7 1.9.4q.4 1-.6 1.2Z" fill="#c9302c"/>
+    <ellipse cx="9.4" cy="-12.6" rx=".8" ry="1.3" fill="#c9302c"/>
+    <path d="M10.1-14.9l2.6.9-2.5.8Z" fill="#dda23a"/><circle cx="8.6" cy="-15.2" r=".6" fill="#1e1e1e"/></g>
+  <path d="M-1.5-.6v1.4M2-.6v1.4" stroke="#d6a344" stroke-width=".9"/></g>`;
+
+function coopSVG(h) {
+  const rnd = rng(h * 7919);
+  let s = `<svg viewBox="0 0 300 170" preserveAspectRatio="xMidYMid slice" role="img" aria-label="ภายในโรงเรือนที่ ${h}">
+    <polygon fill="url(#gCeil)" points="${pts(P(0, 0, 0), P(1, 0, 0), P(1, 0, 1), P(0, 0, 1))}"/>
+    <polygon fill="url(#gWallL)" points="${pts(P(0, 0, 0), P(0, 0, 1), P(0, 1, 1), P(0, 1, 0))}"/>
+    <polygon fill="url(#gWallR)" points="${pts(P(1, 0, 0), P(1, 0, 1), P(1, 1, 1), P(1, 1, 0))}"/>
+    <polygon fill="url(#gFloor)" points="${pts(P(0, 1, 0), P(1, 1, 0), P(1, 1, 1), P(0, 1, 1))}"/>
+    <rect x="115" y="58" width="70" height="34" fill="#9aa2a7"/>
+    <polygon fill="#bfd4dc" opacity=".85" points="${pts(P(0, .3, 0), P(0, .3, 1), P(0, .6, 1), P(0, .6, 0))}"/>
+    <polygon fill="#bfd4dc" opacity=".85" points="${pts(P(1, .3, 0), P(1, .3, 1), P(1, .6, 1), P(1, .6, 0))}"/>`;
+  for (const cx of [134, 166]) s += `<circle cx="${cx}" cy="74" r="9" fill="#2c3135" stroke="#c3c9cd" stroke-width="1"/>
+    <path d="M${cx - 7} 74h14M${cx} 67v14M${cx - 5} 69l10 10M${cx + 5} 69l-10 10" stroke="#59626a" stroke-width="1.2"/>`;
+  // roof trusses and wall posts
+  for (const t of [.5, 1.2, 2, 3.2, 5].map(depth)) {
+    const w = `stroke-width="${(2.4 * S(t)).toFixed(2)}"`;
+    s += ln(P(0, 0, t), P(1, 0, t), `stroke="#3b4147" ${w}`) +
+         ln(P(0, .05, t), P(0, 1, t), `stroke="#5f676d" ${w}`) + ln(P(1, .05, t), P(1, 1, t), `stroke="#5f676d" ${w}`);
+  }
+  s += ln(P(.5, 0, 0), P(.5, 0, 1), `stroke="#3b4147" stroke-width="1.5"`);
+  // two feeder lines with pans, a drinker line between them
+  for (const xn of [.3, .7]) {
+    s += ln(P(xn, .93, 0), P(xn, .93, 1), `stroke="#a7adb2" stroke-width="1.2"`);
+    for (const t of [.15, .45, .85, 1.4, 2.1, 3, 4.3, 6].map(depth)) {
+      const [x, y] = P(xn, .985, t), k = S(t);
+      s += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(8 * k).toFixed(1)}" ry="${(2.6 * k).toFixed(1)}" fill="#d9d5cb" stroke="#8d887e" stroke-width=".5"/>`;
+    }
+  }
+  s += ln(P(.5, .9, 0), P(.5, .9, 1), `stroke="#c9ced2" stroke-width="1"`);
+  // chickens, far ones first so near ones overlap them
+  const hens = Array.from({ length: 46 }, () => ({ xn: .04 + rnd() * .92, t: depth(.1 + rnd() * 5) }))
+    .sort((a, b) => b.t - a.t);
+  for (const c of hens) {
+    const [x, y] = P(c.xn, 1, c.t), k = 1.35 * S(c.t), flip = rnd() < .5 ? -1 : 1;
+    s += `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) scale(${(flip * k).toFixed(3)},${k.toFixed(3)})">` +
+         hen(-(rnd() * 4).toFixed(2), (2.4 + rnd() * 2).toFixed(2), (rnd() * 10 - 5).toFixed(1)) + `</g>`;
+  }
+  // lamps: fixtures sit under the dark shade; their glow and bright bulbs sit above it and show only when lit
+  let fixtures = "", lights = "";
+  for (const t of [.25, .6, 1.1, 1.8, 3, 5].map(depth)) for (const xn of [.28, .72]) {
+    const k = S(t), [x, y] = P(xn, .12, t);
+    fixtures += ln(P(xn, 0, t), [x, y], `stroke="#2a2e31" stroke-width="${(.8 * k + .2).toFixed(2)}"`) +
+      `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(4 * k + .6).toFixed(1)}" ry="${(1.8 * k + .3).toFixed(1)}" fill="#2f3437"/>`;
+    const [fx, fy] = P(xn, 1, t);   // pool of light on the litter under the lamp
+    lights += `<ellipse class="glow" cx="${fx.toFixed(1)}" cy="${fy.toFixed(1)}" rx="${(34 * k).toFixed(1)}" ry="${(9 * k).toFixed(1)}" fill="url(#gGlow)" opacity=".7"/>`;
+    lights += `<circle class="glow" cx="${x.toFixed(1)}" cy="${(y + 2 * k).toFixed(1)}" r="${(30 * k + 4).toFixed(1)}" fill="url(#gGlow)"/>
+      <circle class="bulb-on" cx="${x.toFixed(1)}" cy="${(y + 1.4 * k).toFixed(1)}" r="${(1.8 * k + .4).toFixed(1)}" fill="#fffbe6"/>`;
+  }
+  return s + fixtures + `<rect class="shade" width="300" height="170"/><rect class="warm" width="300" height="170"/>` + lights + `</svg>`;
+}
+
+// Thin wrapper around the Supabase REST API (PostgREST).
+async function sb(path, opts = {}) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
+    ...opts,
+    headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY,
+               "Content-Type": "application/json", ...(opts.headers || {}) },
+  });
+  if (!res.ok) throw new Error(res.status + " " + await res.text());
+  return res.status === 204 ? null : res.json();
+}
+
+async function loadLatest() {
+  const [leds, ...last] = await Promise.all([
+    sb("leds?select=house,state"),
+    ...HOUSES.map(h => sb(`readings?select=temp,humidity,created_at&house=eq.${h}&order=created_at.desc&limit=1`)),
+  ]);
+  return HOUSES.map((h, i) => {
+    const r = last[i][0];
+    const led = leds.find(l => l.house === h);
+    return { house: h, led: !!(led && led.state), temp: r ? r.temp : null,
+             humidity: r ? r.humidity : null, ts: r ? Date.parse(r.created_at) : null,
+             online: !!r && Date.now() - Date.parse(r.created_at) <= ONLINE_MS };
+  });
+}
+
+// [css class, icon, meaning] for a reading; the meaning becomes the icon's tooltip.
+function status(r, online = true) {
+  if (!online) return ["", "wifiOff", "ออฟไลน์ ไม่มีข้อมูลล่าสุด"];
+  if (r.temp > TEMP_MAX) return ["hot", "flame", "อุณหภูมิสูงเกินเกณฑ์"];
+  if (r.temp < TEMP_MIN) return ["cold", "snow", "อุณหภูมิต่ำเกินเกณฑ์"];
+  if (r.humidity > HUM_MAX) return ["wet", "wet", "ความชื้นสูงเกินเกณฑ์"];
+  if (r.humidity < HUM_MIN) return ["dry", "dry", "ความชื้นต่ำเกินเกณฑ์"];
+  return ["ok", "check", "สภาพแวดล้อมเหมาะสม"];
+}
+
+const fmt = v => v == null ? "–" : v.toFixed(1);
+const when = iso => new Date(iso).toLocaleString("th-TH",
+  { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const ago = ts => {
+  if (!ts) return "ยังไม่เคยส่งข้อมูล";
+  const s = Math.round((Date.now() - ts) / 1000);
+  return s < 60 ? `อัปเดต ${s} วินาทีที่แล้ว` : s < 3600 ? `อัปเดต ${Math.round(s / 60)} นาทีที่แล้ว` : `อัปเดตล่าสุด ${new Date(ts).toLocaleString("th-TH")}`;
+};
+
+const SPARK = `<svg class="spark" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"><path class="area"/><path class="line"/></svg>`;
+
+// Cards are built once and then updated in place, so the chicken animations never restart.
+// A house can have two cards on screen: the dashboard one and the big one on its own page.
+function buildCards() {
+  $("cards").innerHTML = HOUSES.map(h => cardHTML(h)).join("");
+}
+
+function cardHTML(h, extra = "") {
+  return `
+    <div class="card ${extra}" data-house="${h}">
+      <div class="card-head"><h3>โรงเรือนที่ ${h}</h3><span class="chip">ออฟไลน์</span></div>
+      <a class="art" href="#house${h}" title="เปิดหน้าโรงเรือนที่ ${h}">${coopSVG(h)}</a>
+      <div class="meas">
+        <div class="mc t" title="อุณหภูมิ · เส้นแนวโน้ม 30 นาที">
+          <div class="m">${ic("thermo")}<b class="vt">–</b><small>°C</small></div>${SPARK}</div>
+        <div class="mc h" title="ความชื้นสัมพัทธ์ · เส้นแนวโน้ม 30 นาที">
+          <div class="m">${ic("drop")}<b class="vh">–</b><small>%</small></div>${SPARK}</div>
+        <div class="badge"></div>
+      </div>
+      <div class="light" title="ไฟส่องสว่างในโรงเรือน">${ic("bulb")}<small class="ago"></small>
+        <button class="switch" data-led="${h}" data-state="1"></button></div>
+    </div>`;
+}
+
+function render(data) {
+  lastData = data;
+  const on = data.filter(d => d.online);
+  const avg = k => on.length ? on.reduce((s, d) => s + d[k], 0) / on.length : null;
+  $("sOnline").textContent = `${on.length} / ${HOUSES.length}`;
+  tween($("sTemp"), avg("temp"), " °C");
+  tween($("sHum"), avg("humidity"), " %");
+  $("sLight").textContent = `${data.filter(d => d.led).length} / ${HOUSES.length}`;
+
+  for (const d of data) for (const card of document.querySelectorAll(`.card[data-house="${d.house}"]`)) {
+    const [cls, icon, msg] = status(d, d.online);
+    card.classList.toggle("online", d.online);
+    card.classList.toggle("lit", d.led);
+    const art = card.querySelector(".art svg");   // chickens stop moving when the house is offline
+    if (d.online && !reduceMotion) art.unpauseAnimations(); else art.pauseAnimations();
+    card.querySelector(".chip").textContent = d.online ? "ออนไลน์" : "ออฟไลน์";
+    tween(card.querySelector(".vt"), d.temp);
+    tween(card.querySelector(".vh"), d.humidity);
+    card.dataset.s = d.online ? cls : "off";
+    const badge = card.querySelector(".badge");
+    if (badge.dataset.icon !== icon) { badge.innerHTML = ic(icon); badge.dataset.icon = icon; }
+    badge.className = "badge " + cls;
+    badge.title = msg;
+    card.querySelector(".ago").textContent = ago(d.ts);
+    const sw = card.querySelector(".switch");
+    sw.dataset.state = d.led ? 0 : 1;
+    sw.disabled = false;
+    sw.setAttribute("aria-label", `${d.led ? "ปิด" : "เปิด"}ไฟโรงเรือนที่ ${d.house}`);
+  }
+  renderAlert(data);
+}
+
+// Banner on the dashboard: green when every house is fine, otherwise one line per house to check.
+function renderAlert(data) {
+  const issues = data.map(d => [d.house, status(d, d.online)]).filter(([, s]) => s[0] !== "ok");
+  const box = $("alert");
+  box.hidden = false;
+  if (!issues.length) {
+    box.className = "alert ok";
+    box.innerHTML = `${ic("check")}<div><b>ทุกโรงเรือนอยู่ในเกณฑ์ปกติ</b>อุณหภูมิ ${TEMP_MIN}–${TEMP_MAX} °C · ความชื้น ${HUM_MIN}–${HUM_MAX} %</div>`;
+    return;
+  }
+  box.className = "alert warn";
+  box.innerHTML = `${ic("alert")}<div><b>พบ ${issues.length} โรงเรือนที่ต้องตรวจสอบ</b>
+    <ul>${issues.map(([h, s]) => `<li>โรงเรือนที่ ${h}: ${s[2]}</li>`).join("")}</ul></div>`;
+}
+
+// Slide a displayed number to its new value instead of jumping.
+function tween(el, to, unit = "") {
+  if (to == null) { el.textContent = "–"; el._v = null; return; }
+  const from = el._v ?? to;
+  el._v = to;
+  if (from === to || reduceMotion) { el.textContent = fmt(to) + unit; return; }
+  const start = performance.now();
+  const step = now => {
+    const p = Math.min(1, (now - start) / 500), e = 1 - (1 - p) ** 3;
+    el.textContent = fmt(from + (to - from) * e) + unit;
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+let toastTimer;
+function toast(msg, err) {
+  const t = $("toast");
+  t.innerHTML = (err ? "" : ic("bulb")) + `<span>${msg}</span>`;
+  t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+// 30-minute trend lines in the cards; refreshed less often than the live values.
+async function loadSparks() {
+  const since = new Date(Date.now() - 30 * 60000).toISOString();
+  const all = await Promise.all(HOUSES.map(h =>
+    sb(`readings?select=temp,humidity&house=eq.${h}&created_at=gte.${since}&order=created_at.asc&limit=400`)));
+  all.forEach((rows, i) => {
+    for (const card of document.querySelectorAll(`.card[data-house="${HOUSES[i]}"]`)) {
+      sparkline(card.querySelector(".mc.t .spark"), rows.map(r => r.temp));
+      sparkline(card.querySelector(".mc.h .spark"), rows.map(r => r.humidity));
+    }
+  });
+}
+
+function sparkline(svg, v) {
+  const [area, line] = svg.children;
+  if (v.length < 2) { area.setAttribute("d", ""); line.setAttribute("d", ""); return; }
+  let lo = Math.min(...v), hi = Math.max(...v);
+  if (hi - lo < .5) { lo -= .25; hi += .25; }
+  const d = v.map((y, i) => `${i ? "L" : "M"}${(i / (v.length - 1) * 100).toFixed(1)} ${(23 - (y - lo) / (hi - lo) * 21).toFixed(1)}`).join("");
+  line.setAttribute("d", d);
+  area.setAttribute("d", d + "L100 26L0 26Z");
+}
+
+async function refresh() {
+  try {
+    render(await loadLatest());
+    await loadPage();
+    $("upd").className = "status";
+    $("upd").textContent = "เชื่อมต่อแล้ว · อัปเดตทุก 3 วินาที";
+  } catch (e) {
+    $("upd").className = "status err";
+    $("upd").textContent = "เชื่อมต่อฐานข้อมูลไม่ได้";
+    $("upd").title = e.message;
+  }
+}
+
+// Only the page on screen fetches its data.
+function loadPage() {
+  if (page === "house") return Promise.all([drawHistory(), tblLimit === PAGE ? loadTable() : null, loadEvents()]);
+  if (page === "chart") return drawHistory();
+  // keep the table live only on its first page, so "ดูเพิ่ม" does not reload hundreds of rows every 3 s
+  if (page === "history" && tblLimit === PAGE) return loadTable();
+  if (page === "lights") return loadEvents();
+}
+
+// A house page (#house1..#house3) borrows the chart, table and light-history panels from their own
+// pages, locked to that house; leaving it puts them back with their filters as they were.
+const BORROWED = [["chartPanel", "chart", "hChart", "houseSeg"], ["tblPanel", "history", "hTable", "tblSeg"],
+                  ["evPanel", "lights", "hEvents", "evSeg"]];
+let houseShown = 0;
+
+function show(p) {
+  const m = /^house([1-3])$/.exec(p);
+  page = m ? "house" : PAGES.includes(p) ? p : "home";
+  document.querySelectorAll("section[data-page]").forEach(s => s.hidden = s.dataset.page !== page);
+  document.querySelectorAll(".side nav a").forEach(a => a.classList.toggle("act", a.getAttribute("href") === "#" + (m ? p : page)));
+  for (const [panel, home, slot, seg] of BORROWED) {
+    (m ? $(slot) : document.querySelector(`section[data-page="${home}"]`)).appendChild($(panel));
+    $(seg).hidden = !!m;
+  }
+  const segHouse = id => +document.querySelector(`#${id} .act`).dataset.h;
+  if (m) {
+    const h = +m[1];
+    $("hTitle").textContent = `โรงเรือนที่ ${h}`;
+    if (houseShown !== h) {
+      $("hCard").innerHTML = cardHTML(h, "big");
+      houseShown = h;
+      if (lastData.length) render(lastData);
+      loadSparks().catch(() => {});
+    }
+    selected = tblHouse = evHouse = h;
+  } else {
+    selected = segHouse("houseSeg"); tblHouse = segHouse("tblSeg"); evHouse = segHouse("evSeg");
+  }
+  tblLimit = PAGE; evLimit = EV_PAGE;
+  window.scrollTo(0, 0);
+  Promise.resolve(loadPage()).catch(() => {});
+}
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+
+function selectHouse(h) {
+  selected = h;
+  document.querySelectorAll("#houseSeg button").forEach(b => b.classList.toggle("act", +b.dataset.h === h));
+  if (page === "chart") drawHistory().catch(() => {});
+}
+
+document.addEventListener("click", async e => {
+  const btn = e.target.closest("button[data-led]");
+  if (btn) {
+    btn.disabled = true;
+    const on = btn.dataset.state === "1";
+    try {
+      await sb(`leds?house=eq.${btn.dataset.led}`, { method: "PATCH",
+        headers: { Prefer: "return=minimal" }, body: JSON.stringify({ state: on }) });
+      toast(`${on ? "เปิด" : "ปิด"}ไฟโรงเรือนที่ ${btn.dataset.led} แล้ว`);
+    } catch (err) { toast("สั่งไฟไม่สำเร็จ: " + err.message, true); }
+    return refresh();
+  }
+});
+$("houseSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) selectHouse(+b.dataset.h); });
+$("rangeSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  minutes = +b.dataset.m;
+  document.querySelectorAll("#rangeSeg button").forEach(x => x.classList.toggle("act", x === b));
+  drawHistory().catch(() => {});
+});
+
+async function drawHistory() {
+  const since = new Date(Date.now() - minutes * 60000).toISOString();
+  // newest MAX_POINTS rows, then reverse into time order
+  const rows = (await sb(`readings?select=temp,humidity,created_at&house=eq.${selected}` +
+    `&created_at=gte.${since}&order=created_at.desc&limit=${MAX_POINTS}`)).reverse()
+    .map(r => ({ ts: Date.parse(r.created_at), temp: r.temp, humidity: r.humidity }));
+  renderSummary(rows);
+
+  const cv = $("chart"), dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  chart = null;
+  if (!w) return;   // page not on screen
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const css = getComputedStyle(document.documentElement);
+  const col = n => css.getPropertyValue(n).trim();
+  g.font = "12px Sarabun, sans-serif"; g.fillStyle = col("--mute");
+  if (!rows.length) { g.textAlign = "center"; g.fillText("ยังไม่มีข้อมูลในช่วงเวลานี้", w / 2, h / 2); return; }
+
+  const L = 44, R = w - 44, T = 12, B = h - 26;
+  const t0 = rows[0].ts, t1 = Math.max(rows[rows.length - 1].ts, t0 + 1);
+  const x = ts => L + (ts - t0) / (t1 - t0) * (R - L);
+
+  g.strokeStyle = col("--line"); g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const y = T + (B - T) * i / 4; g.beginPath(); g.moveTo(L, y); g.lineTo(R, y); g.stroke(); }
+
+  const series = [["temp", "--temp", L - 8, "right", "°"], ["humidity", "--hum", R + 8, "left", "%"]];
+  const ys = {};
+  for (const [k, c, ax, al, unit] of series) {
+    const v = rows.map(r => r[k]);
+    let lo = Math.min(...v), hi = Math.max(...v);
+    if (hi - lo < 2) { lo -= 1; hi += 1; }
+    const y = ys[k] = val => B - (val - lo) / (hi - lo) * (B - T);
+    g.textAlign = al; g.fillStyle = col(c);
+    for (let i = 0; i <= 4; i++) g.fillText((hi - (hi - lo) * i / 4).toFixed(1) + unit, ax, T + (B - T) * i / 4 + 4);
+    g.strokeStyle = col(c); g.lineWidth = 2.2; g.lineJoin = "round"; g.beginPath();
+    rows.forEach((r, i) => i ? g.lineTo(x(r.ts), y(r[k])) : g.moveTo(x(r.ts), y(r[k])));
+    g.stroke();
+    g.lineTo(x(rows[rows.length - 1].ts), B); g.lineTo(x(rows[0].ts), B); g.closePath();
+    g.globalAlpha = .08; g.fill(); g.globalAlpha = 1;
+  }
+  chart = { rows, x, ys, T, B };
+  g.fillStyle = col("--mute");
+  const tf = t => new Date(t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  g.textAlign = "left"; g.fillText(tf(t0), L, h - 6);
+  g.textAlign = "center"; g.fillText(tf((t0 + t1) / 2), (L + R) / 2, h - 6);
+  g.textAlign = "right"; g.fillText(tf(t1), R, h - 6);
+}
+
+// Hover the chart: a cursor line, a dot on each series and a tooltip for the nearest reading.
+let chart = null;
+const HOVER = ["cur", "dotT", "dotH", "tip"];
+$("chartbox").addEventListener("pointermove", e => {
+  if (!chart) return;
+  const box = $("chart").getBoundingClientRect(), mx = e.clientX - box.left;
+  const { rows, x, ys, T, B } = chart;
+  let best = rows[0];
+  for (const r of rows) if (Math.abs(x(r.ts) - mx) < Math.abs(x(best.ts) - mx)) best = r;
+  const px = x(best.ts);
+  Object.assign($("cur").style, { left: px + "px", height: (B - T) + "px" });
+  Object.assign($("dotT").style, { left: px + "px", top: ys.temp(best.temp) + "px" });
+  Object.assign($("dotH").style, { left: px + "px", top: ys.humidity(best.humidity) + "px" });
+  const tip = $("tip");
+  tip.innerHTML = `<b>${when(best.ts)}</b><br><i style="background:var(--temp)"></i>อุณหภูมิ ${fmt(best.temp)} °C
+    <br><i style="background:var(--hum)"></i>ความชื้น ${fmt(best.humidity)} %`;
+  HOVER.forEach(id => $(id).hidden = false);
+  tip.style.left = (px > box.width / 2 ? px - tip.offsetWidth - 14 : px + 14) + "px";
+});
+$("chartbox").addEventListener("pointerleave", () => HOVER.forEach(id => $(id).hidden = true));
+
+// Max / min / average of the rows the chart is showing.
+function renderSummary(rows) {
+  if (!rows.length) { $("summary").innerHTML = ""; return; }
+  const tf = t => new Date(t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  const stat = (k, unit, label) => {
+    let hi = rows[0], lo = rows[0], sum = 0;
+    for (const r of rows) { if (r[k] > hi[k]) hi = r; if (r[k] < lo[k]) lo = r; sum += r[k]; }
+    return `<div>${label}สูงสุด<b>${fmt(hi[k])}${unit}</b><small>เวลา ${tf(hi.ts)}</small></div>
+      <div>${label}ต่ำสุด<b>${fmt(lo[k])}${unit}</b><small>เวลา ${tf(lo.ts)}</small></div>
+      <div>${label}เฉลี่ย<b>${fmt(sum / rows.length)}${unit}</b><small>จาก ${rows.length} ค่า</small></div>`;
+  };
+  $("summary").innerHTML = stat("temp", " °C", "อุณหภูมิ") + stat("humidity", " %", "ความชื้น");
+}
+
+async function loadTable() {
+  const filter = tblHouse ? `&house=eq.${tblHouse}` : "";
+  const rows = await sb(`readings?select=house,temp,humidity,created_at${filter}&order=created_at.desc&limit=${tblLimit}`);
+  $("tblBody").innerHTML = rows.length ? rows.map(r => {
+    const [cls, icon, msg] = status(r);
+    return `<tr class="${cls === "ok" ? "" : "bad"}"><td>${when(r.created_at)}</td><td class="col-house">โรงเรือน ${r.house}</td>
+      <td class="n">${fmt(r.temp)} °C</td><td class="n">${fmt(r.humidity)} %</td>
+      <td><span class="sv"><b class="badge sm ${cls}" title="${msg}">${ic(icon)}</b><span class="txt">${msg}</span></span></td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty">ยังไม่มีข้อมูล</td></tr>`;
+  $("tblCount").textContent = `แสดง ${rows.length} รายการล่าสุด`;
+  $("more").hidden = rows.length < tblLimit || tblLimit >= MAX_POINTS;
+}
+
+$("tblSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  tblHouse = +b.dataset.h; tblLimit = PAGE;
+  document.querySelectorAll("#tblSeg button").forEach(x => x.classList.toggle("act", x === b));
+  loadTable().catch(() => {});
+});
+$("more").onclick = () => { tblLimit = Math.min(tblLimit + PAGE, MAX_POINTS); loadTable().catch(() => {}); };
+
+const hm = t => new Date(t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+const dur = ms => {
+  const m = Math.round(ms / 60000), h = Math.floor(m / 60);
+  return m < 1 ? "ไม่ถึง 1 นาที" : h ? `${h} ชม. ${m % 60} นาที` : `${m} นาที`;
+};
+function dayLabel(t) {
+  const d = new Date(t), today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((today - new Date(d).setHours(0, 0, 0, 0)) / 864e5);
+  const date = d.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long" });
+  return days === 0 ? `วันนี้ · ${date}` : days === 1 ? `เมื่อวาน · ${date}` : date;
+}
+
+// led_events (filled by the leds_log trigger in supabase/setup.sql) holds one row per switch.
+// Pair each "on" with the next "off" of the same house, so one table row = one time the light was on.
+async function loadEvents() {
+  let ev;
+  try {
+    ev = await sb(`led_events?select=house,state,created_at&order=created_at.asc&limit=1000` +
+      `&created_at=gte.${new Date(Date.now() - 7 * 864e5).toISOString()}`);
+  } catch (e) {
+    $("evSum").innerHTML = "";
+    $("events").innerHTML = `<tr><td class="empty" colspan="4">ยังไม่มีตาราง led_events: รัน supabase/setup.sql ใน Supabase อีกครั้ง</td></tr>`;
+    return;
+  }
+  const open = {}, sessions = [];
+  for (const e of ev) {
+    const t = Date.parse(e.created_at);
+    if (e.state) { if (open[e.house] == null) open[e.house] = t; }
+    else { sessions.push({ house: e.house, on: open[e.house] ?? null, off: t }); open[e.house] = null; }
+  }
+  for (const h of HOUSES) if (open[h] != null) sessions.push({ house: h, on: open[h], off: null });
+  sessions.sort((a, b) => (b.on ?? b.off) - (a.on ?? a.off));
+
+  const now = Date.now(), dayStart = new Date().setHours(0, 0, 0, 0);
+  $("evSum").innerHTML = HOUSES.map(h => {
+    const mine = sessions.filter(s => s.house === h);
+    const today = mine.filter(s => (s.off ?? now) >= dayStart);
+    const onMs = today.reduce((sum, s) => sum + (s.off ?? now) - Math.max(s.on ?? dayStart, dayStart), 0);
+    const cur = lastData.find(d => d.house === h);
+    const isOn = cur ? cur.led : mine.some(s => s.off == null);
+    const since = isOn ? mine.find(s => s.off == null)?.on : mine.find(s => s.off != null)?.off;
+    return `<div class="evs ${isOn ? "on" : ""}">${ic("bulb")}<div><b>โรงเรือนที่ ${h}</b>
+      <span>${isOn ? "ไฟเปิดอยู่" : "ไฟปิดอยู่"}${since ? ` · มา ${dur(now - since)}` : ""}</span>
+      <small>วันนี้เปิด ${today.length} ครั้ง · รวม ${dur(onMs)}</small></div></div>`;
+  }).join("");
+
+  const list = sessions.filter(s => !evHouse || s.house === evHouse);
+  let day = "", html = "";
+  for (const s of list.slice(0, evLimit)) {
+    const d = dayLabel(s.on ?? s.off);
+    if (d !== day) { day = d; html += `<tr class="day"><td colspan="4">${d}</td></tr>`; }
+    html += `<tr><td class="col-house">โรงเรือน ${s.house}</td><td>${s.on ? hm(s.on) : "–"}</td>
+      <td>${s.off ? hm(s.off) : `<span class="tag on">ยังเปิดอยู่</span>`}</td>
+      <td>${s.on ? dur((s.off ?? now) - s.on) : "–"}</td></tr>`;
+  }
+  $("events").innerHTML = html || `<tr><td class="empty" colspan="4">ยังไม่มีการเปิด-ปิดไฟใน 7 วันที่ผ่านมา</td></tr>`;
+  $("evMore").hidden = list.length <= evLimit;
+}
+
+$("evSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  evHouse = +b.dataset.h; evLimit = EV_PAGE;
+  document.querySelectorAll("#evSeg button").forEach(x => x.classList.toggle("act", x === b));
+  loadEvents().catch(() => {});
+});
+$("evMore").onclick = () => { evLimit += EV_PAGE; loadEvents().catch(() => {}); };
+
+function tick() {
+  const now = new Date();
+  $("clock").textContent = now.toLocaleTimeString("th-TH");
+  $("today").textContent = now.toLocaleDateString("th-TH", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+window.addEventListener("resize", () => { if (page === "chart") drawHistory().catch(() => {}); });
+buildCards();
+show(location.hash.slice(1));
+tick(); setInterval(tick, 1000);
+refresh(); setInterval(refresh, 3000);
+loadSparks().catch(() => {}); setInterval(() => loadSparks().catch(() => {}), 15000);
+</script>
+</body>
+</html>

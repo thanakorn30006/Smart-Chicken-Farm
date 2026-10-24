@@ -1,0 +1,13 @@
+# Smart Chicken Farm: who may use which MQTT topics.
+#
+# Every gateway logs in with its own username (gw1, gw2-1, ...) and may ONLY use its own topic tree
+# scf/<its username>/...  -> a gateway (or a stolen gateway password) cannot read or fake another farm.
+pattern write scf/%u/status
+pattern write scf/%u/security
+pattern write scf/%u/node/+/telemetry
+pattern write scf/%u/node/+/light/state
+pattern read  scf/%u/node/+/light/set
+
+# Node-RED: the whole farm system
+user nodered
+topic readwrite scf/#

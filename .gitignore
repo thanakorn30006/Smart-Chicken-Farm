@@ -1,0 +1,13 @@
+.DS_Store
+.env
+firmware/*/secrets.h
+firmware/**/secrets.h
+node-red/.config.*
+node-red/.flows*.backup
+node-red/flows_cred.json
+node-red/node_modules/
+# never in git: passwords, keys, local data
+**/.DS_Store
+*.mov
+*.mp4
+node-red/.flows*.json.backup

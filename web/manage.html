@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>จัดการฟาร์ม · Smart Chicken Farm</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d71f26'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle'%3E%F0%9F%90%94%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body class="page-manage">
+<div class="app">
+<aside class="side" id="side"></aside>
+<div class="content">
+<main>
+  <div class="title"><div><h2 id="mTitle">จัดการฟาร์ม</h2><span>ฟาร์มที่กำลังดู: โรงเรือน บอร์ดลูก และ gateway</span></div></div>
+  <div class="quick" id="quick"></div>
+  <div class="panel" id="farmCard"><div class="empty">กำลังโหลด...</div></div>
+  <div class="panel unknown-box" id="unknownBox" hidden>
+    <div class="panel-head"><h3><i data-ic="chip"></i> พบอุปกรณ์ที่ยังไม่ลงทะเบียน</h3><span class="hint">บอร์ดลูกที่ผ่านการยืนยันกุญแจฟาร์มแล้ว แต่ยังไม่ได้ผูกกับโรงเรือน</span></div>
+    <ul class="dev-list" id="unknownList"></ul>
+  </div>
+  <section class="panel" id="coops">
+    <div class="panel-head"><h3>โรงเรือน</h3><button class="btn primary sm" id="coopAdd"><i data-ic="plus"></i>เพิ่มโรงเรือน</button></div>
+    <div class="scroll"><table>
+      <thead><tr><th>โรงเรือน</th><th>บอร์ดลูก</th><th>สถานะ</th><th>รุ่นไก่</th><th>ผู้ดูแลโรงเรือน</th><th class="n">ความจุ</th><th></th></tr></thead>
+      <tbody id="coopBody"></tbody></table></div>
+  </section>
+  <section class="panel" id="gateways">
+    <div class="panel-head"><h3>Gateway (ตัวแม่)</h3><button class="btn sm" id="gwAdd" hidden><i data-ic="plus"></i>เพิ่ม gateway</button></div>
+    <p class="hint">แต่ละ gateway มีบัญชี MQTT ของตัวเอง และส่ง/รับข้อมูลได้เฉพาะหัวข้อของตัวเอง (scf/&lt;ชื่อ&gt;/...) · 1 ตัวรองรับ 20 โรงเรือน</p>
+    <div class="scroll"><table>
+      <thead><tr><th>ชื่อ</th><th>ชื่อผู้ใช้ MQTT</th><th>สถานะ</th><th>เชื่อมต่อล่าสุด</th><th class="n">โรงเรือน</th><th></th></tr></thead>
+      <tbody id="gwBody"></tbody></table></div>
+  </section>
+  <section class="panel" id="farmsBox" hidden>
+    <div class="panel-head"><h3>ฟาร์มทั้งหมด</h3><button class="btn primary sm" id="farmAdd"><i data-ic="plus"></i>เพิ่มฟาร์ม</button></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ฟาร์ม</th><th>ผู้ดูแลฟาร์ม</th><th class="n">โรงเรือน</th><th class="n">ไก่</th><th class="n">Gateway</th><th>สถานะ</th><th></th></tr></thead>
+      <tbody id="farmsBody"></tbody></table></div>
+  </section>
+</main>
+<footer id="footer"></footer>
+</div>
+</div>
+<script type="module" src="js/pages/manage.js"></script>
+</body>
+</html>

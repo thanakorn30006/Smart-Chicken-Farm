@@ -1,0 +1,37 @@
+/* base.css: design tokens, reset, typography. Every page loads base -> layout -> components.
+   Colour has one meaning each: green = brand / actions / normal · amber = light on · red = problem only. */
+:root {
+  --bg:#f3f5f4;          /* page */
+  --card:#ffffff;        /* cards, top bar */
+  --text:#13201a;
+  --mute:#64716b;
+  --line:#e2e7e4;
+  --brand:#17673f;       /* actions, active menu, links */
+  --brand-dark:#0f4d2e;
+  --brand-soft:#e7f2ec;
+  --side:#0f2b1f;        /* sidebar */
+  --side-text:#b9cbc1;
+  --danger:#d33a2c;      /* problems only: too hot, offline, errors */
+  --danger-soft:#fdecea;
+  --lamp:#e9a20c;        /* light on */
+  --lamp-soft:#fff5dc;
+  --ok:#17673f; --ok-soft:#e7f2ec;
+  --cold:#2f5d8a; --cold-soft:#eaf1f8;
+  --off:#cfd6d2;
+  --temp:#d33a2c;        /* chart: temperature */
+  --hum:#2f6f9a;         /* chart: humidity */
+  --red:var(--danger); --red-soft:var(--danger-soft); --red-dark:#a92a1f;   /* old name, kept for inline styles */
+  --radius:12px;
+  --shadow:0 1px 2px rgba(16,32,24,.05), 0 1px 3px rgba(16,32,24,.06);
+  --shadow-lg:0 12px 32px rgba(16,32,24,.12);
+}
+* { box-sizing:border-box; }
+[hidden] { display:none !important; }
+html { color-scheme:light; }
+body { margin:0; background:var(--bg); color:var(--text); font:14.5px/1.55 "IBM Plex Sans Thai", "Sarabun", system-ui, sans-serif;
+       -webkit-font-smoothing:antialiased; }
+h1, h2, h3 { font-weight:600; letter-spacing:-.01em; }
+a { color:inherit; }
+.ic { width:20px; height:20px; flex:none; }
+.num, td.n, .stat b, .kpi b { font-variant-numeric:tabular-nums; }
+:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }

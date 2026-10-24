@@ -1,0 +1,44 @@
+# Smart Chicken Farm server: MQTT broker + Node-RED (API, rules, web app). Start with ./start.sh
+#   http://<server>:1880/          web app (login required)
+#   http://<server>:1880/admin     Node-RED editor (user admin, NR_EDITOR_PASSWORD)
+#   mqtt://<server>:1883           gateways only (username + password, ACL per gateway)
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: scf-mosquitto
+    entrypoint: ["/bin/sh", "/mosquitto/scripts/entrypoint.sh"]
+    ports:
+      - "1883:1883"
+    environment:
+      - MQTT_NODERED_PASSWORD=${MQTT_NODERED_PASSWORD}
+      - MQTT_GW1_PASSWORD=${MQTT_GW1_PASSWORD}
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - ./mosquitto/entrypoint.sh:/mosquitto/scripts/entrypoint.sh:ro
+      - mosquitto-data:/mosquitto/data      # retained messages (light states)
+      - mqtt-auth:/mosquitto/auth           # password file + request queue
+    restart: unless-stopped
+
+  node-red:
+    image: nodered/node-red:4.0
+    container_name: scf-node-red
+    ports:
+      - "1880:1880"
+    env_file: .env                          # Supabase key, session secret, passwords (never in the web folder)
+    environment:
+      - MQTT_HOST=mosquitto
+      - MQTT_QUEUE_FILE=/mqtt-auth/queue
+      - TZ=Asia/Bangkok
+    volumes:
+      - ./node-red:/data                    # settings.js, flows.json, lib/scf.js
+      - ./web:/web:ro                       # the web app, served as static files
+      - ./firmware:/firmware:ro             # Arduino sources for the web's ready-to-flash board kit (ตั้งค่าบอร์ด)
+      - mqtt-auth:/mqtt-auth                # only to queue gateway account changes
+    depends_on:
+      - mosquitto
+    restart: unless-stopped
+
+volumes:
+  mosquitto-data:
+  mqtt-auth:

@@ -1,0 +1,1345 @@
+[
+    {
+        "id": "scf_broker",
+        "type": "mqtt-broker",
+        "name": "Mosquitto (user: nodered)",
+        "broker": "${MQTT_HOST}",
+        "port": "1883",
+        "clientid": "scf-node-red",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "scf_ws",
+        "type": "websocket-listener",
+        "path": "/ws/live",
+        "wholemsg": "false"
+    },
+    {
+        "id": "scf_tab_devices",
+        "type": "tab",
+        "label": "อุปกรณ์: เซนเซอร์ · กฎ · ไฟ",
+        "disabled": false,
+        "info": "MQTT จาก gateway ทุกฟาร์ม: scf/<gateway>/node/<n>/...\nระบุโรงเรือนจากทะเบียนอุปกรณ์ บันทึก ตรวจกฎ แจ้งเตือน ตั้งเวลาไฟ",
+        "env": []
+    },
+    {
+        "id": "scf_tab_cache",
+        "type": "tab",
+        "label": "ข้อมูลฟาร์ม (cache)",
+        "disabled": false,
+        "info": "โหลดฟาร์ม/gateway/โรงเรือน/ผู้ใช้ไว้ใน memory + คำนวณเป้าหมายตามอายุไก่",
+        "env": []
+    },
+    {
+        "id": "scf_tab_api",
+        "type": "tab",
+        "label": "HTTP API (ตรวจสิทธิ์)",
+        "disabled": false,
+        "info": "POST /auth/login และ /api/* ทุกคำขอต้องมี token และผ่านการตรวจสิทธิ์ตามบทบาท + ฟาร์ม",
+        "env": []
+    },
+    {
+        "id": "scf_tab_ws",
+        "type": "tab",
+        "label": "WebSocket ข้อมูลสด",
+        "disabled": false,
+        "info": "ws://<server>:1880/ws/live  หน้าเว็บยืนยันตัวตนก่อน แล้วได้รับเฉพาะข้อมูลฟาร์มตัวเอง",
+        "env": []
+    },
+    {
+        "id": "scf_tab_sim",
+        "type": "tab",
+        "label": "จำลองบอร์ด (ปิดไว้)",
+        "disabled": true,
+        "info": "เปิดด้วย ./start.sh demo เมื่อไม่มีบอร์ดจริง: ส่งค่าให้ทุกโรงเรือนที่ผูกอุปกรณ์แล้ว และตอบรับคำสั่งไฟ",
+        "env": []
+    },
+    {
+        "id": "scfwo0001",
+        "type": "websocket out",
+        "z": "scf_tab_ws",
+        "name": "ส่งให้หน้าเว็บ",
+        "server": "scf_ws",
+        "client": "",
+        "x": 700,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "scffn0002",
+        "type": "function",
+        "z": "scf_tab_ws",
+        "name": "ยืนยันตัวตนหน้าจอ",
+        "func": "// WebSocket /ws/live: หน้าเว็บส่ง {type:\"auth\", token, farm_id} มาก่อน ถึงจะได้รับข้อมูลสด\n// ผู้ที่ไม่ใช่ admin ได้รับเฉพาะฟาร์มของตัวเองเสมอ ไม่ว่าจะขอฟาร์มไหน\nconst scf = global.get(\"scf\");\nconst sid = msg._session && msg._session.id;\nif (!sid || typeof msg.payload !== \"string\" || msg.payload.length > 2048) return null;\nlet m;\ntry { m = JSON.parse(msg.payload); } catch (e) { return null; }\nconst reply = obj => ({ _session: msg._session, payload: JSON.stringify(obj) });\nif (m.type === \"ping\") return reply({ type: \"pong\" });\nif (m.type !== \"auth\") return null;\n\nconst p = scf.verifyToken(m.token);\nconst u = p && (global.get(\"users\") || {})[p.uid];\nif (!p || !u || !u.active || (u.session_version || 0) !== p.sv) return reply({ type: \"auth-failed\" });\nconst farmId = u.role === \"admin\" ? scf.int(m.farm_id) : u.farm_id;\nconst sessions = global.get(\"wsSessions\") || {};\nconst now = Date.now() / 1000;\nfor (const [k, s] of Object.entries(sessions)) if (s.exp < now) delete sessions[k];\nconst ids = Object.keys(sessions);\nif (ids.length > 1000) ids.sort((a, b) => sessions[a].at - sessions[b].at).slice(0, ids.length - 1000).forEach(k => delete sessions[k]);\nsessions[sid] = { uid: u.id, sv: p.sv, exp: p.exp, farm_id: farmId, at: Date.now() };\nglobal.set(\"wsSessions\", sessions);\nnode.status({ fill: \"green\", shape: \"dot\", text: Object.keys(sessions).length + \" หน้าจอ\" });\nreturn reply({ type: \"ready\", farm_id: farmId });",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 100,
+        "wires": [
+            [
+                "scfwo0001"
+            ]
+        ]
+    },
+    {
+        "id": "scfwi0003",
+        "type": "websocket in",
+        "z": "scf_tab_ws",
+        "name": "/ws/live",
+        "server": "scf_ws",
+        "client": "",
+        "x": 170,
+        "y": 100,
+        "wires": [
+            [
+                "scffn0002"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0004",
+        "type": "function",
+        "z": "scf_tab_ws",
+        "name": "ส่งเฉพาะคนในฟาร์ม",
+        "func": "// ส่งข้อมูลสดให้เฉพาะหน้าจอของคนในฟาร์มนั้น   msg.payload = {farm_id (null = ทุกคน), data}\n// ตรวจสิทธิ์ซ้ำทุกครั้ง: บัญชีถูกปิด/เปลี่ยนสิทธิ์/token หมดอายุ -> ตัดการรับข้อมูลทันที\nconst sessions = global.get(\"wsSessions\") || {}, users = global.get(\"users\") || {};\nconst { farm_id, data } = msg.payload || {};\nif (!data) return null;\nconst text = JSON.stringify(data), now = Date.now() / 1000, out = [];\nfor (const [sid, s] of Object.entries(sessions)) {\n    const u = users[s.uid];\n    if (!u || !u.active || (u.session_version || 0) !== s.sv || s.exp < now) {\n        out.push({ _session: { type: \"websocket\", id: sid }, payload: JSON.stringify({ type: \"auth-expired\" }) });\n        delete sessions[sid];\n        continue;\n    }\n    if (farm_id != null && s.farm_id !== farm_id) continue;\n    if (u.role === \"coop_keeper\" && farm_id != null) {       // ผู้ดูแลโรงเรือน: เฉพาะโรงเรือนของตัวเอง\n        if (data.coop_id != null ? !(u.coop_ids || []).includes(Number(data.coop_id)) : data.type === \"alert\") continue;\n    }\n    out.push({ _session: { type: \"websocket\", id: sid }, payload: text });\n}\nglobal.set(\"wsSessions\", sessions);\nreturn [out];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 180,
+        "wires": [
+            [
+                "scfwo0001"
+            ]
+        ]
+    },
+    {
+        "id": "scfli0005",
+        "type": "link in",
+        "z": "scf_tab_ws",
+        "name": "ข้อมูลสด",
+        "links": [
+            "scflo000d",
+            "scflo0017",
+            "scflo0024",
+            "scflo0031"
+        ],
+        "x": 180,
+        "y": 180,
+        "wires": [
+            [
+                "scffn0004"
+            ]
+        ]
+    },
+    {
+        "id": "scfcm0006",
+        "type": "comment",
+        "z": "scf_tab_ws",
+        "name": "ทุกข้อความ (ค่าวัด ไฟ แจ้งเตือน) ผ่าน \"ส่งเฉพาะคนในฟาร์ม\" ก่อนถึงหน้าจอ",
+        "info": "",
+        "x": 400,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "scfmo0007",
+        "type": "mqtt out",
+        "z": "scf_tab_devices",
+        "name": "คำสั่งไฟ → gateway",
+        "topic": "",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "scf_broker",
+        "x": 980,
+        "y": 520,
+        "wires": []
+    },
+    {
+        "id": "scfli0008",
+        "type": "link in",
+        "z": "scf_tab_devices",
+        "name": "คำสั่งไฟจาก API",
+        "links": [
+            "scflo002f"
+        ],
+        "x": 760,
+        "y": 560,
+        "wires": [
+            [
+                "scfmo0007"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0009",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "ตั้งเวลาไฟอัตโนมัติ",
+        "func": "// ตั้งเวลาไฟ: โรงเรือนโหมด \"ตั้งเวลา\" ให้ไฟติดในช่วง light_on -> light_off (ข้ามเที่ยงคืนได้) ทุกฟาร์ม\nconst now = new Date(), mins = now.getHours() * 60 + now.getMinutes();\nconst toMin = s => { const p = String(s).split(\":\").map(Number); return p[0] * 60 + p[1]; };\nconst out = [];\nlet auto = 0;\nfor (const c of global.get(\"coops\") || []) {\n    if (!c.active || c.light_mode !== \"auto\" || !c.mqtt_user) continue;\n    auto++;\n    const on = toMin(c.light_on), off = toMin(c.light_off);\n    const want = on === off ? true : on < off ? (mins >= on && mins < off) : (mins >= on || mins < off);\n    if (flow.get(\"set_\" + c.id) === want) continue;\n    flow.set(\"set_\" + c.id, want);\n    out.push({ topic: \"scf/\" + c.mqtt_user + \"/node/\" + c.node_id + \"/light/set\", payload: want ? \"ON\" : \"OFF\", retain: true, qos: 1 });\n}\nnode.status(auto ? { fill: \"blue\", shape: \"dot\", text: auto + \" โรงเรือนตั้งเวลา\" } : { fill: \"grey\", shape: \"ring\", text: \"ไม่มีโรงเรือนตั้งเวลา\" });\nreturn [out];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 520,
+        "wires": [
+            [
+                "scfmo0007"
+            ]
+        ]
+    },
+    {
+        "id": "scfli000a",
+        "type": "link in",
+        "z": "scf_tab_devices",
+        "name": "ปลุกตัวตั้งเวลา",
+        "links": [
+            "scflo0025"
+        ],
+        "x": 560,
+        "y": 560,
+        "wires": [
+            [
+                "scffn0009"
+            ]
+        ]
+    },
+    {
+        "id": "scfin000b",
+        "type": "inject",
+        "z": "scf_tab_devices",
+        "name": "ทุก 15 วิ",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "15",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "8",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 560,
+        "y": 520,
+        "wires": [
+            [
+                "scffn0009"
+            ]
+        ]
+    },
+    {
+        "id": "scfcm000c",
+        "type": "comment",
+        "z": "scf_tab_devices",
+        "name": "① ค่าที่วัดได้ → ระบุโรงเรือนจากทะเบียน → บันทึก + ตรวจเป้าหมาย + ส่งหน้าจอ",
+        "info": "",
+        "x": 340,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "scflo000d",
+        "type": "link out",
+        "z": "scf_tab_devices",
+        "name": "ข้อมูลสด",
+        "mode": "link",
+        "links": [
+            "scfli0005"
+        ],
+        "x": 980,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "scffn000e",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "บันทึกค่า",
+        "func": "// INSERT INTO readings\nconst scf = global.get(\"scf\");\nconst r = msg.reading;\ntry {\n    await scf.db.insert(\"readings\", { coop_id: r.coop_id, temp: r.temp, humidity: r.humidity });\n    node.status({ fill: \"green\", shape: \"dot\", text: \"บันทึกล่าสุด \" + new Date().toLocaleTimeString(\"th-TH\") });\n} catch (e) {\n    node.status({ fill: \"red\", shape: \"ring\", text: e.message.slice(0, 40) });\n    node.error(\"บันทึกค่าไม่สำเร็จ: \" + e.message);\n}\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 80,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "scffn000f",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "บันทึกแจ้งเตือน",
+        "func": "// เก็บการแจ้งเตือนลงตาราง alerts แล้วส่งให้หน้าจอของคนในฟาร์มนั้น\nconst scf = global.get(\"scf\");\nconst a = msg.alert;\nlet at = new Date().toISOString();\ntry {\n    const rows = await scf.db.insert(\"alerts\", { farm_id: a.farm_id, coop_id: a.coop_id, level: a.level, message: a.message, temp: a.temp, humidity: a.humidity });\n    if (rows && rows[0]) at = rows[0].created_at;\n} catch (e) { node.error(\"บันทึกการแจ้งเตือนไม่สำเร็จ: \" + e.message); }\nnode.status({ fill: a.level === \"ok\" ? \"green\" : \"red\", shape: \"dot\", text: a.coop_name + \": \" + a.level });\nreturn { payload: { farm_id: a.farm_id, data: { type: \"alert\", coop_id: a.coop_id, level: a.level, message: a.message, at } } };",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 200,
+        "wires": [
+            [
+                "scflo000d"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0010",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "กฎ: ตรงเป้าหมายไหม",
+        "func": "// กฎ: เทียบค่ากับเป้าหมายของโรงเรือนนั้น (ปรับตามอายุไก่ ดูแท็บ \"ข้อมูลฟาร์ม\") แจ้งเฉพาะตอนสถานะเปลี่ยน\nconst r = msg.reading;\nconst coop = (global.get(\"coops\") || []).find(c => c.id === r.coop_id);\nif (!coop) return null;\nconst t = coop.target;\nconst why = coop.flock ? \" (ไก่อายุ \" + coop.flock.age_days + \" วัน ควรอยู่ \" + t.temp_min + \"–\" + t.temp_max + \" °C)\"\n                       : \" (เกณฑ์ \" + t.temp_min + \"–\" + t.temp_max + \" °C)\";\nlet level = \"ok\", message = \"กลับมาอยู่ในเกณฑ์แล้ว\";\nif (r.temp > t.temp_max)          { level = \"hot\";  message = \"ร้อนเกินไป \" + r.temp + \" °C\" + why; }\nelse if (r.temp < t.temp_min)     { level = \"cold\"; message = \"หนาวเกินไป \" + r.temp + \" °C\" + why; }\nelse if (r.humidity > t.hum_max)  { level = \"wet\";  message = \"ชื้นเกินไป \" + r.humidity + \" % (ควรอยู่ \" + t.hum_min + \"–\" + t.hum_max + \" %)\"; }\nelse if (r.humidity < t.hum_min)  { level = \"dry\";  message = \"แห้งเกินไป \" + r.humidity + \" % (ควรอยู่ \" + t.hum_min + \"–\" + t.hum_max + \" %)\"; }\nconst key = \"alert_\" + r.coop_id, prev = flow.get(key);\nif (prev === level) return null;\nflow.set(key, level);\nif (prev === undefined && level === \"ok\") return null;     // เพิ่งเริ่มระบบและปกติดี\nreturn { alert: { farm_id: coop.farm_id, coop_id: coop.id, coop_name: coop.name, level, message, temp: r.temp, humidity: r.humidity } };",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 540,
+        "y": 140,
+        "wires": [
+            [
+                "scffn000f"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0011",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "อุปกรณ์ไม่ลงทะเบียน",
+        "func": "// อุปกรณ์ที่ผ่านการตรวจของ gateway แต่ยังไม่ได้ลงทะเบียนเป็นโรงเรือน: บันทึกไว้ให้ผู้ดูแลเห็นในหน้า \"จัดการฟาร์ม\"\nconst scf = global.get(\"scf\");\nconst d = msg.payload;\nconst gw = (global.get(\"gateways\") || []).find(g => g.mqtt_user === d.mqtt_user);\nconst farmId = gw ? gw.farm_id : null;\nconst message = \"พบอุปกรณ์ที่ยังไม่ลงทะเบียน: \" + d.mqtt_user + \" โหนด \" + d.node_id;\nnode.warn(message);\ntry {\n    await scf.db.insert(\"audit_log\", { action: \"unknown_device\", farm_id: farmId, detail: d });\n    await scf.db.insert(\"alerts\", { farm_id: farmId, coop_id: null, level: \"unknown\", message });\n} catch (e) { node.error(e.message); }\nreturn farmId ? { payload: { farm_id: farmId, data: { type: \"alert\", coop_id: null, level: \"unknown\", message, at: new Date().toISOString() } } } : null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 540,
+        "y": 260,
+        "wires": [
+            [
+                "scflo000d"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0012",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "ระบุอุปกรณ์ + ตรวจค่า",
+        "func": "// ระบุอุปกรณ์: topic scf/<gateway>/node/<n>/telemetry -> โรงเรือนไหน ฟาร์มไหน\n// - Mosquitto ACL ทำให้ gateway เขียนได้เฉพาะ scf/<ชื่อตัวเอง>/... จึงปลอมเป็น gateway อื่นไม่ได้\n// - gateway ตรวจ HMAC ของแพ็กเก็ต ESP-NOW ก่อนส่งต่อ จึงปลอมเป็นโหนดไม่ได้\n// - ที่นี่: รับเฉพาะ (gateway, โหนด) ที่ลงทะเบียนเป็นโรงเรือนแล้ว + ตรวจช่วงค่า + จำกัดความถี่\n// outputs: 1 บันทึก, 2 กฎ, 3 ส่งข้อมูลสด, 4 อุปกรณ์ที่ยังไม่ลงทะเบียน\nconst m = /^scf\\/(gw[a-z0-9-]{1,30})\\/node\\/([0-9]{1,2})\\/telemetry$/.exec(msg.topic);\nif (!m) return null;\nconst gw = m[1], nodeId = Number(m[2]);\nconst coop = (global.get(\"coops\") || []).find(c => c.active && c.mqtt_user === gw && c.node_id === nodeId);\nif (!coop) {\n    const k = \"unknown_\" + gw + \"_\" + nodeId, last = flow.get(k) || 0;\n    const unknown = global.get(\"unknownDevices\") || {};\n    unknown[gw + \":\" + nodeId] = { mqtt_user: gw, node_id: nodeId, last_seen: new Date().toISOString() };\n    global.set(\"unknownDevices\", unknown);\n    if (Date.now() - last < 10 * 60000) return null;          // แจ้งไม่เกิน 1 ครั้ง / 10 นาที\n    flow.set(k, Date.now());\n    return [null, null, null, { payload: { mqtt_user: gw, node_id: nodeId } }];\n}\nconst d = msg.payload;\nif (!d || typeof d !== \"object\" || !Number.isFinite(d.temp) || !Number.isFinite(d.humidity)\n    || d.temp < -40 || d.temp > 125 || d.humidity < 0 || d.humidity > 100) {\n    node.warn(\"ค่าผิดรูปแบบ/เกินช่วงเซนเซอร์ \" + msg.topic + \" \" + JSON.stringify(d));\n    return null;\n}\nconst rk = \"rate_\" + coop.id, now = Date.now();\nif (now - (flow.get(rk) || 0) < 2000) return null;            // กัน flood: ไม่เกิน 1 ค่า / 2 วินาที / โรงเรือน\nflow.set(rk, now);\nflow.set(\"lastSeen_\" + coop.id, now);\nconst temp = Math.round(d.temp * 100) / 100, humidity = Math.round(d.humidity * 100) / 100;\nconst live = global.get(\"live\") || {};\nlive[coop.id] = Object.assign({}, live[coop.id], { temp, humidity, at: new Date(now).toISOString() });\nglobal.set(\"live\", live);\nconst reading = { coop_id: coop.id, farm_id: coop.farm_id, temp, humidity };\nnode.status({ fill: \"green\", shape: \"dot\", text: coop.name + \": \" + temp + \"°C \" + humidity + \"%\" });\nreturn [{ reading }, { reading },\n        { payload: { farm_id: coop.farm_id, data: { type: \"telemetry\", coop_id: coop.id, temp, humidity, at: live[coop.id].at } } }, null];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 330,
+        "y": 140,
+        "wires": [
+            [
+                "scffn000e"
+            ],
+            [
+                "scffn0010"
+            ],
+            [
+                "scflo000d"
+            ],
+            [
+                "scffn0011"
+            ]
+        ]
+    },
+    {
+        "id": "scfmi0013",
+        "type": "mqtt in",
+        "z": "scf_tab_devices",
+        "name": "scf/+/node/+/telemetry",
+        "topic": "scf/+/node/+/telemetry",
+        "qos": "1",
+        "datatype": "json",
+        "broker": "scf_broker",
+        "nl": false,
+        "rap": false,
+        "rh": 0,
+        "inputs": 0,
+        "x": 120,
+        "y": 140,
+        "wires": [
+            [
+                "scffn0012"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0014",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "watchdog ขาดการติดต่อ",
+        "func": "// ทุก 5 วิ: โรงเรือนที่เคยส่งข้อมูลแล้วเงียบเกิน 30 วิ = ขาดการติดต่อ (โหนดดับ / gateway ดับ / สัญญาณหลุด)\nconst OFFLINE_MS = 30000, out = [];\nfor (const c of global.get(\"coops\") || []) {\n    if (!c.active) continue;\n    const seen = flow.get(\"lastSeen_\" + c.id);\n    if (!seen || Date.now() - seen <= OFFLINE_MS) continue;\n    const key = \"alert_\" + c.id;\n    if (flow.get(key) === \"offline\") continue;\n    flow.set(key, \"offline\");\n    out.push({ alert: { farm_id: c.farm_id, coop_id: c.id, coop_name: c.name, level: \"offline\",\n                        message: \"ขาดการติดต่อ: ไม่ได้รับข้อมูลเกิน 30 วินาที\", temp: null, humidity: null } });\n}\nreturn [out];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 540,
+        "y": 200,
+        "wires": [
+            [
+                "scffn000f"
+            ]
+        ]
+    },
+    {
+        "id": "scfin0015",
+        "type": "inject",
+        "z": "scf_tab_devices",
+        "name": "ทุก 5 วิ",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "5",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 330,
+        "y": 200,
+        "wires": [
+            [
+                "scffn0014"
+            ]
+        ]
+    },
+    {
+        "id": "scfcm0016",
+        "type": "comment",
+        "z": "scf_tab_devices",
+        "name": "② ไฟ + gateway",
+        "info": "",
+        "x": 160,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "scflo0017",
+        "type": "link out",
+        "z": "scf_tab_devices",
+        "name": "ข้อมูลสด",
+        "mode": "link",
+        "links": [
+            "scfli0005"
+        ],
+        "x": 760,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "scffn0018",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "สถานะไฟ (ACK จากโหนด)",
+        "func": "// สถานะไฟจริงที่โหนดยืนยัน (ACK): scf/<gateway>/node/<n>/light/state\n// บันทึกลง led_events เฉพาะตอนเปลี่ยนจริง และส่งให้หน้าจอทันที\nconst scf = global.get(\"scf\");\nconst m = /^scf\\/(gw[a-z0-9-]{1,30})\\/node\\/([0-9]{1,2})\\/light\\/state$/.exec(msg.topic);\nif (!m) return null;\nconst coop = (global.get(\"coops\") || []).find(c => c.active && c.mqtt_user === m[1] && c.node_id === Number(m[2]));\nif (!coop) return null;\nconst on = String(msg.payload).trim().toUpperCase() === \"ON\";\nconst live = global.get(\"live\") || {};\nconst prev = live[coop.id] && live[coop.id].ledKnown ? live[coop.id].led : undefined;\nlive[coop.id] = Object.assign({}, live[coop.id], { led: on, ledKnown: true });\nglobal.set(\"live\", live);\nnode.status({ fill: on ? \"yellow\" : \"grey\", shape: \"dot\", text: coop.name + \": \" + (on ? \"ON\" : \"OFF\") });\nconst out = { payload: { farm_id: coop.farm_id, data: { type: \"light\", coop_id: coop.id, on } } };\n// retained = old state replayed by the broker on (re)connect; same as before = gateway re-announcing it\nif (!msg.retain && prev !== on) {\n    try { await scf.db.insert(\"led_events\", { coop_id: coop.id, state: on }); }\n    catch (e) { node.error(\"บันทึกสถานะไฟไม่สำเร็จ: \" + e.message); }\n}\nreturn out;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 380,
+        "wires": [
+            [
+                "scflo0017"
+            ]
+        ]
+    },
+    {
+        "id": "scfmi0019",
+        "type": "mqtt in",
+        "z": "scf_tab_devices",
+        "name": "scf/+/node/+/light/state",
+        "topic": "scf/+/node/+/light/state",
+        "qos": "1",
+        "datatype": "utf8",
+        "broker": "scf_broker",
+        "nl": false,
+        "rap": false,
+        "rh": 0,
+        "inputs": 0,
+        "x": 130,
+        "y": 380,
+        "wires": [
+            [
+                "scffn0018"
+            ]
+        ]
+    },
+    {
+        "id": "scffn001a",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "สถานะ gateway",
+        "func": "// scf/<gateway>/status = online / offline (offline is the gateway's MQTT Last Will, sent by the broker)\nconst scf = global.get(\"scf\");\nconst m = /^scf\\/(gw[a-z0-9-]{1,30})\\/status$/.exec(msg.topic);\nif (!m) return null;\nconst online = String(msg.payload).trim() === \"online\";\nconst status = global.get(\"gwOnline\") || {};\nstatus[m[1]] = online;\nglobal.set(\"gwOnline\", status);\nconst gw = (global.get(\"gateways\") || []).find(g => g.mqtt_user === m[1]);\nnode.status({ fill: online ? \"green\" : \"red\", shape: online ? \"dot\" : \"ring\", text: m[1] + \" \" + (online ? \"online\" : \"offline\") });\nif (!gw) return null;\nif (online && !msg.retain) scf.db.update(\"gateways\", \"id=eq.\" + gw.id, { last_seen: new Date().toISOString() }).catch(e => node.warn(e.message));\nreturn { payload: { farm_id: gw.farm_id, data: { type: \"gateway\", gateway_id: gw.id, online } } };",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 420,
+        "wires": [
+            [
+                "scflo0017"
+            ]
+        ]
+    },
+    {
+        "id": "scfmi001b",
+        "type": "mqtt in",
+        "z": "scf_tab_devices",
+        "name": "scf/+/status",
+        "topic": "scf/+/status",
+        "qos": "1",
+        "datatype": "utf8",
+        "broker": "scf_broker",
+        "nl": false,
+        "rap": false,
+        "rh": 0,
+        "inputs": 0,
+        "x": 130,
+        "y": 420,
+        "wires": [
+            [
+                "scffn001a"
+            ]
+        ]
+    },
+    {
+        "id": "scffn001c",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "รายงานความปลอดภัย gateway",
+        "func": "// scf/<gateway>/security: gateway พบแพ็กเก็ต ESP-NOW ปลอม (HMAC ผิด) หรือส่งซ้ำ (replay) -> แจ้งเตือน + บันทึก\nconst scf = global.get(\"scf\");\nconst m = /^scf\\/(gw[a-z0-9-]{1,30})\\/security$/.exec(msg.topic);\nconst d = msg.payload;\nif (!m || !d || typeof d !== \"object\") return null;\nconst n = k => Math.max(0, Math.min(1e6, Number(d[k]) || 0));\nconst report = { bad_tag: n(\"bad_tag\"), replay: n(\"replay\"), bad_format: n(\"bad_format\") };\nif (!report.bad_tag && !report.replay && !report.bad_format) return null;\nconst gw = (global.get(\"gateways\") || []).find(g => g.mqtt_user === m[1]);\nconst farmId = gw ? gw.farm_id : null;\nconst message = \"ตรวจพบแพ็กเก็ตที่ไม่ผ่านการยืนยันที่ \" + m[1] + \": HMAC ผิด \" + report.bad_tag + \" · ส่งซ้ำ \" + report.replay + \" · รูปแบบผิด \" + report.bad_format + \" (อาจมีอุปกรณ์แปลกปลอม)\";\nnode.warn(message);\ntry {\n    await scf.db.insert(\"audit_log\", { action: \"sensor_security\", farm_id: farmId, detail: Object.assign({ gateway: m[1] }, report) });\n    await scf.db.insert(\"alerts\", { farm_id: farmId, coop_id: null, level: \"security\", message });\n} catch (e) { node.error(e.message); }\nreturn farmId ? { payload: { farm_id: farmId, data: { type: \"alert\", coop_id: null, level: \"security\", message, at: new Date().toISOString() } } } : null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 500,
+        "wires": [
+            [
+                "scflo0017"
+            ]
+        ]
+    },
+    {
+        "id": "scfmi001d",
+        "type": "mqtt in",
+        "z": "scf_tab_devices",
+        "name": "scf/+/security",
+        "topic": "scf/+/security",
+        "qos": "1",
+        "datatype": "json",
+        "broker": "scf_broker",
+        "nl": false,
+        "rap": false,
+        "rh": 0,
+        "inputs": 0,
+        "x": 130,
+        "y": 500,
+        "wires": [
+            [
+                "scffn001c"
+            ]
+        ]
+    },
+    {
+        "id": "scfdb001e",
+        "type": "debug",
+        "z": "scf_tab_devices",
+        "name": "คำสั่งไฟ",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 620,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "scffn001f",
+        "type": "function",
+        "z": "scf_tab_devices",
+        "name": "จำคำสั่งล่าสุด",
+        "func": "// จำคำสั่งไฟล่าสุดของแต่ละโรงเรือน (ตัวตั้งเวลาใช้เทียบว่าต้องสั่งใหม่ไหม)\nconst m = /^scf\\/(gw[a-z0-9-]{1,30})\\/node\\/([0-9]{1,2})\\/light\\/set$/.exec(msg.topic);\nif (!m) return null;\nconst coop = (global.get(\"coops\") || []).find(c => c.mqtt_user === m[1] && c.node_id === Number(m[2]));\nif (coop) flow.set(\"set_\" + coop.id, String(msg.payload).trim().toUpperCase() === \"ON\");\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 460,
+        "wires": [
+            [
+                "scfdb001e"
+            ]
+        ]
+    },
+    {
+        "id": "scfmi0020",
+        "type": "mqtt in",
+        "z": "scf_tab_devices",
+        "name": "scf/+/node/+/light/set",
+        "topic": "scf/+/node/+/light/set",
+        "qos": "1",
+        "datatype": "utf8",
+        "broker": "scf_broker",
+        "nl": false,
+        "rap": false,
+        "rh": 0,
+        "inputs": 0,
+        "x": 130,
+        "y": 460,
+        "wires": [
+            [
+                "scffn001f"
+            ]
+        ]
+    },
+    {
+        "id": "scfdb0021",
+        "type": "debug",
+        "z": "scf_tab_devices",
+        "name": "ข้อผิดพลาด",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 330,
+        "y": 620,
+        "wires": []
+    },
+    {
+        "id": "scfca0022",
+        "type": "catch",
+        "z": "scf_tab_devices",
+        "name": "error ใด ๆ",
+        "scope": null,
+        "uncaught": false,
+        "x": 130,
+        "y": 620,
+        "wires": [
+            [
+                "scfdb0021"
+            ]
+        ]
+    },
+    {
+        "id": "scfcm0023",
+        "type": "comment",
+        "z": "scf_tab_cache",
+        "name": "เป้าหมายอุณหภูมิไก่เนื้อ: วันแรก 32 °C → ~20 °C ที่ 6 สัปดาห์ (±3 °C) · ADMIN_PASSWORD ใน .env สร้างบัญชี admin แรก",
+        "info": "",
+        "x": 440,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "scflo0024",
+        "type": "link out",
+        "z": "scf_tab_cache",
+        "name": "ข้อมูลสด",
+        "mode": "link",
+        "links": [
+            "scfli0005"
+        ],
+        "x": 760,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "scflo0025",
+        "type": "link out",
+        "z": "scf_tab_cache",
+        "name": "ปลุกตัวตั้งเวลา",
+        "mode": "link",
+        "links": [
+            "scfli000a"
+        ],
+        "x": 760,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "scffn0026",
+        "type": "function",
+        "z": "scf_tab_cache",
+        "name": "โหลดข้อมูลฟาร์ม",
+        "func": "// โหลดข้อมูลทุกฟาร์มเก็บใน memory (global): ฟาร์ม, gateway, โรงเรือน+รุ่นไก่, ผู้ใช้ (+ โรงเรือนของผู้ดูแลโรงเรือน)\n// แล้วคำนวณอายุไก่ + เป้าหมายอุณหภูมิของแต่ละโรงเรือน\n// โหลดตอนเริ่ม, ทุก 5 นาที (อายุไก่เปลี่ยนตามวัน) และทุกครั้งที่มีการแก้ข้อมูลจากเว็บ\n// outputs: 1 แจ้งหน้าจอว่าข้อมูลเปลี่ยน, 2 ปลุกตัวตั้งเวลาไฟ\nconst scf = global.get(\"scf\");\n\n// เป้าหมายอุณหภูมิไก่เนื้อตามอายุ (ประมาณจากคู่มือ Ross/Cobb), ช่วงที่ยอมรับ = เป้าหมาย ±3 °C\nconst TEMP_BY_AGE = [[0, 32], [7, 29], [14, 27], [21, 25], [28, 23], [35, 21], [42, 20]];\nconst BAND = 3;\nconst ideal = age => {\n    for (let i = 1; i < TEMP_BY_AGE.length; i++) {\n        const [a1, t1] = TEMP_BY_AGE[i - 1], [a2, t2] = TEMP_BY_AGE[i];\n        if (age <= a2) return t1 + (t2 - t1) * (Math.max(age, 0) - a1) / (a2 - a1);\n    }\n    return TEMP_BY_AGE[TEMP_BY_AGE.length - 1][1];\n};\nconst num = (k, d) => { const v = Number(env.get(k)); return env.get(k) != null && env.get(k) !== \"\" && Number.isFinite(v) ? v : d; };\nconst DEF = { temp_min: num(\"TEMP_MIN\", 18), temp_max: num(\"TEMP_MAX\", 30), hum_min: num(\"HUM_MIN\", 50), hum_max: num(\"HUM_MAX\", 70) };\nconst r1 = v => Math.round(v * 10) / 10;\nconst now = new Date();\nconst today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());\nconst ageOf = ymd => { const [y, m, d] = String(ymd).split(\"-\").map(Number); return Math.max(0, Math.round((today - Date.UTC(y, m - 1, d)) / 864e5)); };\n\ntry {\n    let [farms, gateways, coops, users, latest, userCoops] = await Promise.all([\n        scf.db.get(\"farms?select=id,name,location,active,created_at&order=id\"),\n        scf.db.get(\"gateways?select=id,farm_id,name,mqtt_user,active,last_seen,created_at&order=id\"),\n        scf.db.get(\"coop_state?select=*&order=id\"),\n        scf.db.get(\"users?select=id,username,display_name,role,farm_id,active,session_version,last_login,locked_until,totp_enabled&order=id\"),\n        scf.db.get(\"latest_readings?select=coop_id,temp,humidity,created_at\"),\n        scf.db.get(\"user_coops?select=user_id,coop_id&order=coop_id\"),\n        scf.db.get(\"farms?select=farm_key&limit=1\"),      // v3.3 schema check: fails = setup.sql not run yet\n    ]);\n\n    // very first start: create the first admin from ADMIN_PASSWORD in .env\n    if (!users.length) {\n        const pw = env.get(\"ADMIN_PASSWORD\") || \"\";\n        if (scf.passwordProblem(pw)) node.error(\"ยังไม่มีผู้ใช้ และ ADMIN_PASSWORD ใน .env ใช้ไม่ได้: \" + scf.passwordProblem(pw));\n        else {\n            await scf.db.insert(\"users\", { username: \"admin\", display_name: \"ผู้ดูแลระบบ\", password_hash: scf.hashPassword(pw), role: \"admin\" });\n            await scf.db.insert(\"audit_log\", { username: \"system\", action: \"bootstrap_admin\", detail: { username: \"admin\" } });\n            users = await scf.db.get(\"users?select=id,username,display_name,role,farm_id,active,session_version,last_login,locked_until,totp_enabled&order=id\");\n            node.warn(\"สร้างบัญชีผู้ดูแลระบบแรก (admin) แล้ว\");\n        }\n    }\n\n    // v3.3: keep the first farm's FARM_KEY (from .env, already in firmware/*/secrets.h) so the web can hand out board files\n    if (!flow.get(\"farmKeyChecked\")) {\n        const gw1 = gateways.find(g => g.mqtt_user === \"gw1\"), key = String(env.get(\"FARM_KEY\") || \"\").toLowerCase();\n        if (gw1 && scf.FARM_KEY_RE.test(key)) {\n            try { await scf.db.update(\"farms\", \"id=eq.\" + gw1.farm_id + \"&farm_key=is.null\", { farm_key: key }); }\n            catch (e) { node.warn(\"farm_key: \" + e.message); }\n        }\n        flow.set(\"farmKeyChecked\", true);\n    }\n    // ฉุกเฉิน: MFA_RESET_USER=<ชื่อผู้ใช้> ใน .env แล้วรัน start.sh = ปิด 2 ขั้นของคนนั้น (เช่น admin คนเดียวทำมือถือหาย)\n    const resetName = String(env.get(\"MFA_RESET_USER\") || \"\").trim().toLowerCase();\n    if (resetName && flow.get(\"mfaResetDone\") !== resetName) {\n        const t = users.find(u => u.username === resetName);\n        if (t) {\n            await scf.db.update(\"users\", \"id=eq.\" + t.id, { totp_secret: null, totp_enabled: false, totp_last_step: null, mfa_backup: null,\n                                                           session_version: (t.session_version || 0) + 1 });\n            t.totp_enabled = false; t.session_version = (t.session_version || 0) + 1;\n            await scf.db.insert(\"audit_log\", { username: \"system\", action: \"mfa_reset\", detail: { target: t.username, by: \"MFA_RESET_USER\" } });\n            node.warn(\"ปิดการยืนยันตัวตน 2 ขั้นของ \" + t.username + \" แล้ว (เอา MFA_RESET_USER ออกจาก .env ได้)\");\n        }\n        flow.set(\"mfaResetDone\", resetName);\n    }\n    const gwById = Object.fromEntries(gateways.map(g => [g.id, g]));\n    const list = coops.map(r => {\n        let flock = null, target = Object.assign({}, DEF, { temp_ideal: null, by_age: false });\n        if (r.flock_id) {\n            const age = ageOf(r.started_on), deaths = Number(r.deaths) || 0;\n            flock = { id: Number(r.flock_id), started_on: r.started_on, birds: Number(r.birds), breed: r.breed, age_days: age, deaths,\n                      alive: Math.max(0, Number(r.birds) - deaths), feed_kg: r1(Number(r.feed_kg) || 0),\n                      avg_weight_g: r.avg_weight_g == null ? null : Number(r.avg_weight_g), last_log_date: r.last_log_date || null };\n            const t = ideal(age);\n            target = { temp_min: r1(t - BAND), temp_max: r1(t + BAND), temp_ideal: r1(t), hum_min: age < 7 ? 60 : 50, hum_max: 70, by_age: true };\n        }\n        const gw = gwById[r.gateway_id];\n        return { id: Number(r.id), farm_id: Number(r.farm_id), name: r.name, capacity: r.capacity, gateway_id: r.gateway_id,\n                 mqtt_user: gw && gw.active ? r.mqtt_user : null, node_id: r.node_id, light_mode: r.light_mode,\n                 light_on: r.light_on, light_off: r.light_off, active: r.active, flock, target };\n    });\n\n    const live = global.get(\"live\") || {};\n    for (const l of latest) {\n        if (!live[l.coop_id] || !live[l.coop_id].at) live[l.coop_id] = Object.assign({}, live[l.coop_id], { temp: l.temp, humidity: l.humidity, at: l.created_at });\n    }\n    global.set(\"live\", live);\n    global.set(\"farms\", farms);\n    global.set(\"gateways\", gateways);\n    global.set(\"coops\", list);\n    const coopIds = {};\n    for (const r of userCoops) (coopIds[r.user_id] = coopIds[r.user_id] || []).push(Number(r.coop_id));\n    global.set(\"users\", Object.fromEntries(users.map(u => [u.id, Object.assign(u, { coop_ids: coopIds[u.id] || [] })])));\n    global.set(\"cacheReady\", true);\n    node.status({ fill: \"green\", shape: \"dot\", text: farms.length + \" ฟาร์ม · \" + list.filter(c => c.active).length + \" โรงเรือน · \" + users.length + \" ผู้ใช้\" });\n    return [{ payload: { farm_id: null, data: { type: \"config\" } } }, { payload: \"run\" }];\n} catch (e) {\n    node.status({ fill: \"red\", shape: \"ring\", text: \"โหลดไม่ได้: \" + e.message.slice(0, 40) });\n    node.error(\"โหลดข้อมูลฟาร์มไม่ได้ (รัน supabase/setup.sql แล้วหรือยัง?): \" + e.message);\n    return null;\n}",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 520,
+        "y": 120,
+        "wires": [
+            [
+                "scflo0024"
+            ],
+            [
+                "scflo0025"
+            ]
+        ]
+    },
+    {
+        "id": "scfin0027",
+        "type": "inject",
+        "z": "scf_tab_cache",
+        "name": "ตอนเริ่ม + ทุก 5 นาที",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "300",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 260,
+        "y": 100,
+        "wires": [
+            [
+                "scffn0026"
+            ]
+        ]
+    },
+    {
+        "id": "scfli0028",
+        "type": "link in",
+        "z": "scf_tab_cache",
+        "name": "โหลดใหม่",
+        "links": [
+            "scflo0030"
+        ],
+        "x": 300,
+        "y": 160,
+        "wires": [
+            [
+                "scffn0026"
+            ]
+        ]
+    },
+    {
+        "id": "scfdb0029",
+        "type": "debug",
+        "z": "scf_tab_cache",
+        "name": "ข้อผิดพลาด",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 520,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "scfca002a",
+        "type": "catch",
+        "z": "scf_tab_cache",
+        "name": "error ใด ๆ",
+        "scope": null,
+        "uncaught": false,
+        "x": 300,
+        "y": 220,
+        "wires": [
+            [
+                "scfdb0029"
+            ]
+        ]
+    },
+    {
+        "id": "scfcm002b",
+        "type": "comment",
+        "z": "scf_tab_api",
+        "name": "POST /auth/login  →  GET|POST /api/:resource  →  ตรวจ token  →  แยกตามหมวด  →  ตรวจสิทธิ์ตามบทบาท+ฟาร์ม",
+        "info": "",
+        "x": 440,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "scfhs002c",
+        "type": "http response",
+        "z": "scf_tab_api",
+        "name": "ตอบเว็บ",
+        "statusCode": "",
+        "headers": {},
+        "x": 1100,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "scffn002d",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "เข้าสู่ระบบ",
+        "func": "// POST /api/login {username, password}\n// - รหัสผ่านตรวจด้วย scrypt (เทียบแบบเวลาเท่ากัน)\n// - ผิด 5 ครั้งติด ล็อกบัญชี 5 นาที / IP เดียวผิดเกิน 20 ครั้งใน 10 นาที บล็อกชั่วคราว\n// - สำเร็จ: ได้ token ที่ลงลายเซ็นไว้ อายุ 12 ชม. ทุกครั้งบันทึกลง audit_log\n// - เปิดยืนยันตัวตน 2 ขั้นไว้ (หรือบทบาทบังคับใช้) = ยังไม่ได้ token: ได้ \"ตั๋ว\" 5 นาทีไปกรอกรหัส 6 หลักที่ POST /auth/mfa\nconst scf = global.get(\"scf\");\nconst b = (msg.payload && typeof msg.payload === \"object\") ? msg.payload : {};\nconst username = String(b.username || \"\").trim().toLowerCase();\nconst password = String(b.password || \"\");\nconst ip = String((msg.req.headers && msg.req.headers[\"x-forwarded-for\"]) || msg.req.ip || \"\").split(\",\")[0].trim();\n\nconst ipKey = \"ipfail_\" + ip;\nlet rec = flow.get(ipKey) || { n: 0, t: Date.now() };\nif (Date.now() - rec.t > 10 * 60000) rec = { n: 0, t: Date.now() };\nif (rec.n >= 20) return scf.reply(msg, 429, { error: \"ลองเข้าสู่ระบบผิดหลายครั้งเกินไป กรุณารอ 10 นาที\" });\n\nconst audit = (action, u, detail) => scf.db.insert(\"audit_log\", {\n    user_id: u ? u.id : null, username: u ? u.username : username.slice(0, 32) || null, farm_id: u ? u.farm_id : null, action, detail,\n}).catch(e => node.warn(\"audit: \" + e.message));\nconst denied = async (u, reason) => {\n    rec.n++; flow.set(ipKey, rec);\n    await audit(\"login_fail\", u, { reason, ip });\n    return scf.reply(msg, 401, { error: \"ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง\" });\n};\n\ntry {\n    if (!/^[a-z0-9._-]{3,32}$/.test(username) || !password || password.length > 128) return await denied(null, \"format\");\n    const u = (await scf.db.get(\"users?select=*&username=eq.\" + username))[0];\n    if (!u) {\n        let dummy = flow.get(\"dummyHash\");\n        if (!dummy) { dummy = scf.hashPassword(\"not-a-real-password-1\"); flow.set(\"dummyHash\", dummy); }\n        scf.verifyPassword(password, dummy);                       // same time as a real check: no user enumeration\n        return await denied(null, \"no_user\");\n    }\n    if (u.locked_until && Date.parse(u.locked_until) > Date.now()) {\n        await audit(\"login_locked\", u, { ip });\n        return scf.reply(msg, 423, { error: \"บัญชีถูกล็อกชั่วคราวเพราะใส่รหัสผิดหลายครั้ง ลองใหม่หลัง \" +\n            new Date(u.locked_until).toLocaleTimeString(\"th-TH\", { hour: \"2-digit\", minute: \"2-digit\" }) + \" น.\" });\n    }\n    if (!scf.verifyPassword(password, u.password_hash)) {\n        const n = (u.failed_logins || 0) + 1, lock = n >= 5;\n        await scf.db.update(\"users\", \"id=eq.\" + u.id, { failed_logins: lock ? 0 : n, locked_until: lock ? new Date(Date.now() + 5 * 60000).toISOString() : null });\n        return await denied(u, lock ? \"locked_now\" : \"password\");\n    }\n    if (!u.active) return await denied(u, \"inactive\");\n    if (u.role !== \"admin\") {                                // ผู้ดูแลฟาร์ม/ผู้ดู: ฟาร์มของตัวเองต้องยังเปิดใช้งาน\n        const farm = (global.get(\"farms\") || []).find(f => f.id === u.farm_id);\n        if (!farm || !farm.active) return await denied(u, \"farm_inactive\");\n    }\n    // ---- ขั้นที่ 2: รหัสจากแอป Authenticator (TOTP)\n    const ticket = scf.signToken(u, 300, \"mfa\");\n    if (u.totp_enabled) {\n        await audit(\"login_password_ok\", u, { ip });\n        return scf.reply(msg, 200, { mfa: \"code\", mfa_token: ticket, expires_in: 300 });\n    }\n    if (scf.mfaRequired(u)) {                              // บทบาทนี้ต้องใช้ แต่ยังไม่ได้ตั้งค่า: ตั้งค่าเดี๋ยวนี้ก่อนเข้าระบบ\n        const secret = scf.newTotpSecret();\n        await scf.db.update(\"users\", \"id=eq.\" + u.id, { totp_secret: scf.sealSecret(secret), totp_enabled: false, totp_last_step: null });\n        await audit(\"login_password_ok\", u, { ip, mfa_setup: true });\n        return scf.reply(msg, 200, { mfa: \"setup\", mfa_token: ticket, expires_in: 300, secret, otpauth: scf.otpauthUrl(u.username, secret),\n                                     username: u.username, display_name: u.display_name });\n    }\n    await scf.db.update(\"users\", \"id=eq.\" + u.id, { failed_logins: 0, locked_until: null, last_login: new Date().toISOString() });\n    await audit(\"login_ok\", u, { ip });\n    rec.n = 0; flow.set(ipKey, rec);\n    u.coop_ids = ((global.get(\"users\") || {})[u.id] || {}).coop_ids || [];\n    return scf.reply(msg, 200, { token: scf.signToken(u), expires_in: scf.TOKEN_TTL, user: Object.assign(scf.publicUser(u), { perms: scf.permsOf(u) }) });\n} catch (e) {\n    node.error(\"login: \" + e.message);\n    return scf.errorReply(msg, e);\n}",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 100,
+        "wires": [
+            [
+                "scfhs002c"
+            ]
+        ]
+    },
+    {
+        "id": "scfhi002e",
+        "type": "http in",
+        "z": "scf_tab_api",
+        "name": "",
+        "url": "/auth/login",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 170,
+        "y": 100,
+        "wires": [
+            [
+                "scffn002d"
+            ]
+        ]
+    },
+    {
+        "id": "scflo002f",
+        "type": "link out",
+        "z": "scf_tab_api",
+        "name": "คำสั่งไฟ",
+        "mode": "link",
+        "links": [
+            "scfli0008"
+        ],
+        "x": 1100,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "scflo0030",
+        "type": "link out",
+        "z": "scf_tab_api",
+        "name": "โหลดใหม่",
+        "mode": "link",
+        "links": [
+            "scfli0028"
+        ],
+        "x": 1100,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "scflo0031",
+        "type": "link out",
+        "z": "scf_tab_api",
+        "name": "ข้อมูลสด",
+        "mode": "link",
+        "links": [
+            "scfli0005"
+        ],
+        "x": 1100,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "scffn0032",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "อ่านข้อมูล (ดู)",
+        "func": "// ---- ส่วนกลางของทุก API (ตรวจสิทธิ์ + ตัวช่วย) ----\nconst scf = global.get(\"scf\");\nconst user = msg.user, q = msg.q, b = msg.body, R = msg.resource;\nconst farms = global.get(\"farms\") || [], coops = global.get(\"coops\") || [], gateways = global.get(\"gateways\") || [];\nconst isAdmin = user.role === \"admin\";\nconst fail = scf.fail;\n// สิทธิ์: ไม่ผ่าน = 403 ทันที (ผู้ใช้ที่ไม่ใช่ admin ทำได้เฉพาะในฟาร์มของตัวเอง · ผู้ดูแลโรงเรือนเฉพาะโรงเรือนของตัวเอง)\nconst need = (perm, farmId, coopId) => { if (!scf.can(user, perm, farmId, coopId)) throw fail(403, \"คุณไม่มีสิทธิ์ทำรายการนี้\"); };\n// ฟาร์มที่คำขอนี้หมายถึง: admin เลือกได้ (ไม่ระบุ = ฟาร์มแรกที่เปิดใช้งาน), คนอื่นได้ฟาร์มตัวเองเท่านั้น (ขอฟาร์มอื่น = 403)\nconst farmParam = () => {\n    const asked = scf.int(q.farm_id != null ? q.farm_id : b.farm_id);\n    if (!isAdmin) {\n        if (asked && asked !== user.farm_id) throw fail(403, \"คุณเข้าถึงได้เฉพาะฟาร์มของตัวเอง\");\n        return user.farm_id;\n    }\n    return asked || (farms.find(f => f.active) || farms[0] || {}).id || null;\n};\nconst farmOf = id => { const f = farms.find(f => f.id === scf.int(id)); if (!f || !scf.seesFarm(user, f.id)) throw fail(404, \"ไม่พบฟาร์ม\"); return f; };\n// โรงเรือนในฟาร์มอื่น (หรือที่ผู้ดูแลโรงเรือนไม่ได้ดูแล) ตอบว่า \"ไม่พบ\" (ไม่บอกว่ามีอยู่)\nconst coopOf = id => { const c = coops.find(c => c.id === scf.int(id)); if (!c || !scf.seesCoop(user, c)) throw fail(404, \"ไม่พบโรงเรือน\"); return c; };\nconst text = (v, max, label, required = true) => {\n    const s = String(v == null ? \"\" : v).trim();\n    if (required && !s) throw fail(400, \"กรุณากรอก\" + label);\n    if (s.length > max) throw fail(400, label + \"ยาวเกิน \" + max + \" ตัวอักษร\");\n    return s || null;\n};\nconst isDate = s => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s)) && !isNaN(Date.parse(s));\nconst isTime = s => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s));\nconst pad = n => String(n).padStart(2, \"0\");\nconst todayStr = (() => { const d = new Date(); return d.getFullYear() + \"-\" + pad(d.getMonth() + 1) + \"-\" + pad(d.getDate()); })();\nconst since = () => q.since && !isNaN(Date.parse(q.since)) ? new Date(q.since).toISOString() : null;\nconst limit = (d, max = 1000) => Math.min(Math.max(parseInt(q.limit, 10) || d, 1), max);\nconst audit = (action, farmId, detail) => scf.db.insert(\"audit_log\", {\n    user_id: user.id, username: user.username, farm_id: farmId == null ? null : farmId, action, detail: detail == null ? null : detail,\n}).catch(e => node.warn(\"audit: \" + e.message));\n// outputs: 1 ตอบเว็บ, 2 MQTT (คำสั่งไฟ), 3 โหลดข้อมูลฟาร์มใหม่, 4 ส่งข้อมูลสด\nconst done = (body, extra = {}) => { node.send([scf.reply(msg, 200, body), extra.mqtt || null, extra.reload ? { payload: \"reload\" } : null, extra.live || null]); };\nconst run = async fn => {\n    try { await fn(); }\n    catch (e) {\n        if (!e.http && e.code !== \"23505\") node.error(R + \": \" + e.message);\n        node.send([scf.errorReply(msg, e), null, null, null]);\n    }\n};\n// ---- จบส่วนกลาง ----\n\n// GET: me · farms · farm-data · readings · led-events · alerts · daily-logs · audit\n// ทุกข้อมูลกรองด้วยฟาร์มที่ผู้ใช้มีสิทธิ์ที่ server (ไม่ใช่แค่ซ่อนในหน้าเว็บ)\nawait run(async () => {\n    if (msg.method !== \"GET\") throw fail(405, \"method not allowed\");\n    const visibleFarms = farms.filter(f => scf.seesFarm(user, f.id));\n    const users = Object.values(global.get(\"users\") || {});\n    const keepersOf = fid => users.filter(u => u.active && u.role === \"keeper\" && u.farm_id === fid);\n    // ผู้ดูแลโรงเรือนของแต่ละโรง (ชื่อที่แสดง)\n    const caretakersOf = cid => users.filter(u => u.active && u.role === \"coop_keeper\" && scf.coopIdsOf(u).includes(cid)).map(u => u.display_name);\n\n    if (R === \"me\") return done({ user: Object.assign(scf.publicUser(user), { perms: scf.permsOf(user) }),\n                                  farms: visibleFarms.map(f => ({ id: f.id, name: f.name, active: f.active })),\n                                  // ที่อยู่เว็บสำหรับส่งให้คนอื่น (IP ของเครื่อง server ใน Wi-Fi จาก start.sh)\n                                  lan_url: /^[0-9.]{7,15}$/.test(env.get(\"SERVER_IP\") || \"\") ? \"http://\" + env.get(\"SERVER_IP\") + \":1880/\" : null });\n\n    if (R === \"farms\") {\n        need(\"view\", isAdmin ? null : user.farm_id);\n        return done(visibleFarms.map(f => {\n            const fc = coops.filter(c => c.farm_id === f.id && c.active);\n            return { id: f.id, name: f.name, location: f.location, active: f.active, created_at: f.created_at,\n                     coops: fc.length, birds: fc.reduce((s, c) => s + (c.flock ? c.flock.alive : 0), 0),\n                     gateways: gateways.filter(g => g.farm_id === f.id && g.active).length,\n                     keepers: keepersOf(f.id).map(u => u.display_name),\n                     staff: users.filter(u => u.farm_id === f.id && u.active).length,\n                     // หน้าผู้ใช้: รายชื่อโรงเรือนให้เลือกตอนมอบหมายผู้ดูแลโรงเรือน\n                     coop_list: scf.can(user, \"staff_manage\", f.id)\n                         ? coops.filter(c => c.farm_id === f.id).map(c => ({ id: c.id, name: c.name, active: c.active })) : undefined };\n        }));\n    }\n\n    if (R === \"farm-data\") {\n        const fid = farmParam();\n        if (!fid) return done({ farm: null, coops: [], gateways: [], keepers: [], unknown_devices: [] });\n        need(\"view\", fid);\n        const farm = farmOf(fid);\n        const live = global.get(\"live\") || {}, gwOnline = global.get(\"gwOnline\") || {};\n        const canManage = scf.can(user, \"coop_manage\", fid);\n        const farmGws = gateways.filter(g => g.farm_id === fid);\n        const unknown = !canManage ? [] : Object.values(global.get(\"unknownDevices\") || {})\n            .filter(d => farmGws.some(g => g.mqtt_user === d.mqtt_user) && !coops.some(c => c.active && c.mqtt_user === d.mqtt_user && c.node_id === d.node_id));\n        return done({\n            farm: { id: farm.id, name: farm.name, location: farm.location, active: farm.active },\n            coops: coops.filter(c => c.farm_id === fid && (c.active || canManage) && scf.seesCoop(user, c)).map(c => Object.assign({}, c, {\n                live: live[c.id] || null,\n                gateway_name: (farmGws.find(g => g.id === c.gateway_id) || {}).name || null,\n                caretakers: caretakersOf(c.id),\n            })),\n            gateways: farmGws.map(g => ({ id: g.id, name: g.name, mqtt_user: canManage ? g.mqtt_user : undefined, active: g.active,\n                                          online: !!gwOnline[g.mqtt_user], last_seen: g.last_seen })),\n            keepers: keepersOf(fid).map(u => u.display_name),\n            unknown_devices: unknown,\n        });\n    }\n\n    // history: one coop (coop_id) or every coop of the farm\n    const scope = () => {\n        if (q.coop_id) { const c = coopOf(q.coop_id); need(\"view\", c.farm_id); return [c.id]; }\n        const fid = farmParam();\n        if (!fid) throw fail(400, \"ต้องระบุฟาร์ม\");\n        need(\"view\", fid);\n        return coops.filter(c => c.farm_id === fid && scf.seesCoop(user, c)).map(c => c.id);\n    };\n    const sinceQ = () => since() ? \"&created_at=gte.\" + since() : \"\";\n\n    if (R === \"readings\") {\n        const ids = scope();\n        if (!ids.length) return done([]);\n        const order = q.order === \"asc\" ? \"asc\" : \"desc\";\n        return done(await scf.db.get(\"readings?select=coop_id,temp,humidity,created_at&coop_id=\" + scf.inList(ids) +\n            sinceQ() + \"&order=created_at.\" + order + \"&limit=\" + limit(100)));\n    }\n    if (R === \"led-events\") {\n        const ids = scope();\n        if (!ids.length) return done([]);\n        return done(await scf.db.get(\"led_events?select=coop_id,state,created_at&coop_id=\" + scf.inList(ids) +\n            sinceQ() + \"&order=created_at.asc&limit=2000\"));\n    }\n    if (R === \"alerts\") {\n        let filter;\n        if (q.coop_id) { const c = coopOf(q.coop_id); need(\"view\", c.farm_id); filter = \"coop_id=eq.\" + c.id; }\n        else {\n            const fid = farmParam(); if (!fid) return done([]); need(\"view\", fid);\n            filter = \"farm_id=eq.\" + fid;\n            if (user.role === \"coop_keeper\") {             // ผู้ดูแลโรงเรือน: เฉพาะแจ้งเตือนของโรงเรือนตัวเอง\n                const mine = coops.filter(c => c.farm_id === fid && scf.seesCoop(user, c)).map(c => c.id);\n                if (!mine.length) return done([]);\n                filter = \"coop_id=\" + scf.inList(mine);\n            }\n        }\n        return done(await scf.db.get(\"alerts?select=id,coop_id,level,message,temp,humidity,created_at&\" + filter +\n            sinceQ() + \"&order=created_at.desc&limit=\" + limit(100)));\n    }\n    if (R === \"daily-logs\") {\n        const c = coopOf(q.coop_id);\n        need(\"view\", c.farm_id);\n        if (!c.flock) return done([]);\n        return done(await scf.db.get(\"daily_logs?select=log_date,deaths,feed_kg,avg_weight_g,note,created_by&flock_id=eq.\" +\n            c.flock.id + \"&order=log_date.desc&limit=400\"));\n    }\n    if (R === \"audit\") {\n        need(\"audit_view\", null);\n        const fid = q.all ? null : farmParam();\n        return done(await scf.db.get(\"audit_log?select=id,username,farm_id,action,detail,created_at\" + (fid ? \"&farm_id=eq.\" + fid : \"\") + sinceQ() +\n            \"&order=created_at.desc&limit=\" + limit(200, 1000)));\n    }\n    throw fail(404, \"ไม่รู้จัก \" + R);\n});\nreturn null;\n",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 860,
+        "y": 160,
+        "wires": [
+            [
+                "scfhs002c"
+            ],
+            [
+                "scflo002f"
+            ],
+            [
+                "scflo0030"
+            ],
+            [
+                "scflo0031"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0033",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "สั่งงานโรงเรือน",
+        "func": "// ---- ส่วนกลางของทุก API (ตรวจสิทธิ์ + ตัวช่วย) ----\nconst scf = global.get(\"scf\");\nconst user = msg.user, q = msg.q, b = msg.body, R = msg.resource;\nconst farms = global.get(\"farms\") || [], coops = global.get(\"coops\") || [], gateways = global.get(\"gateways\") || [];\nconst isAdmin = user.role === \"admin\";\nconst fail = scf.fail;\n// สิทธิ์: ไม่ผ่าน = 403 ทันที (ผู้ใช้ที่ไม่ใช่ admin ทำได้เฉพาะในฟาร์มของตัวเอง · ผู้ดูแลโรงเรือนเฉพาะโรงเรือนของตัวเอง)\nconst need = (perm, farmId, coopId) => { if (!scf.can(user, perm, farmId, coopId)) throw fail(403, \"คุณไม่มีสิทธิ์ทำรายการนี้\"); };\n// ฟาร์มที่คำขอนี้หมายถึง: admin เลือกได้ (ไม่ระบุ = ฟาร์มแรกที่เปิดใช้งาน), คนอื่นได้ฟาร์มตัวเองเท่านั้น (ขอฟาร์มอื่น = 403)\nconst farmParam = () => {\n    const asked = scf.int(q.farm_id != null ? q.farm_id : b.farm_id);\n    if (!isAdmin) {\n        if (asked && asked !== user.farm_id) throw fail(403, \"คุณเข้าถึงได้เฉพาะฟาร์มของตัวเอง\");\n        return user.farm_id;\n    }\n    return asked || (farms.find(f => f.active) || farms[0] || {}).id || null;\n};\nconst farmOf = id => { const f = farms.find(f => f.id === scf.int(id)); if (!f || !scf.seesFarm(user, f.id)) throw fail(404, \"ไม่พบฟาร์ม\"); return f; };\n// โรงเรือนในฟาร์มอื่น (หรือที่ผู้ดูแลโรงเรือนไม่ได้ดูแล) ตอบว่า \"ไม่พบ\" (ไม่บอกว่ามีอยู่)\nconst coopOf = id => { const c = coops.find(c => c.id === scf.int(id)); if (!c || !scf.seesCoop(user, c)) throw fail(404, \"ไม่พบโรงเรือน\"); return c; };\nconst text = (v, max, label, required = true) => {\n    const s = String(v == null ? \"\" : v).trim();\n    if (required && !s) throw fail(400, \"กรุณากรอก\" + label);\n    if (s.length > max) throw fail(400, label + \"ยาวเกิน \" + max + \" ตัวอักษร\");\n    return s || null;\n};\nconst isDate = s => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s)) && !isNaN(Date.parse(s));\nconst isTime = s => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s));\nconst pad = n => String(n).padStart(2, \"0\");\nconst todayStr = (() => { const d = new Date(); return d.getFullYear() + \"-\" + pad(d.getMonth() + 1) + \"-\" + pad(d.getDate()); })();\nconst since = () => q.since && !isNaN(Date.parse(q.since)) ? new Date(q.since).toISOString() : null;\nconst limit = (d, max = 1000) => Math.min(Math.max(parseInt(q.limit, 10) || d, 1), max);\nconst audit = (action, farmId, detail) => scf.db.insert(\"audit_log\", {\n    user_id: user.id, username: user.username, farm_id: farmId == null ? null : farmId, action, detail: detail == null ? null : detail,\n}).catch(e => node.warn(\"audit: \" + e.message));\n// outputs: 1 ตอบเว็บ, 2 MQTT (คำสั่งไฟ), 3 โหลดข้อมูลฟาร์มใหม่, 4 ส่งข้อมูลสด\nconst done = (body, extra = {}) => { node.send([scf.reply(msg, 200, body), extra.mqtt || null, extra.reload ? { payload: \"reload\" } : null, extra.live || null]); };\nconst run = async fn => {\n    try { await fn(); }\n    catch (e) {\n        if (!e.http && e.code !== \"23505\") node.error(R + \": \" + e.message);\n        node.send([scf.errorReply(msg, e), null, null, null]);\n    }\n};\n// ---- จบส่วนกลาง ----\n\n// POST: light · lights-off · settings · flock · flock-end · daily-log\n//   ทุกคำสั่งตรวจว่าโรงเรือนอยู่ในฟาร์มของผู้ใช้ (ผู้ดูแลฟาร์ม = ฟาร์มตัวเอง, admin = ทุกฟาร์ม)\n//   light, settings, flock(-end), daily-log   ผู้ดูแลโรงเรือน (เฉพาะโรงเรือนของตัวเอง) ผู้ดูแลฟาร์ม และผู้ดูแลระบบ\n//   lights-off                                ผู้ดูแลฟาร์มขึ้นไป: ปิดไฟทุกโรงเรือนของฟาร์มพร้อมกันด้วยปุ่มเดียว\nconst lightTopic = c => \"scf/\" + c.mqtt_user + \"/node/\" + c.node_id + \"/light/set\";\nawait run(async () => {\n    if (msg.method !== \"POST\") throw fail(405, \"method not allowed\");\n\n    if (R === \"lights-off\") {\n        const fid = farmParam();\n        need(\"light_all\", fid);\n        const targets = coops.filter(c => c.farm_id === fid && c.active && c.mqtt_user);\n        if (!targets.length) throw fail(409, \"ยังไม่มีโรงเรือนที่ผูกกับอุปกรณ์\");\n        // ตั้งเวลาไว้ = เลิกตั้งเวลา ไม่งั้นตัวตั้งเวลาจะเปิดกลับ\n        const autoIds = targets.filter(c => c.light_mode === \"auto\").map(c => c.id);\n        if (autoIds.length) {\n            await scf.db.update(\"coops\", \"id=\" + scf.inList(autoIds), { light_mode: \"manual\" });\n            for (const c of targets) if (autoIds.includes(c.id)) c.light_mode = \"manual\";\n        }\n        await audit(\"lights_off_all\", fid, { coops: targets.length, to_manual: autoIds.length || undefined });\n        return done({ ok: true, coops: targets.map(c => c.id), to_manual: autoIds.length }, {\n            mqtt: targets.map(c => ({ topic: lightTopic(c), payload: \"OFF\", retain: true, qos: 1 })),\n            reload: autoIds.length > 0,\n        });\n    }\n\n    const c = coopOf(b.coop_id);\n    if (!c.active) throw fail(409, \"โรงเรือนนี้ถูกปิดใช้งาน\");\n\n    if (R === \"light\") {\n        need(\"light\", c.farm_id, c.id);\n        if (!c.mqtt_user) throw fail(409, \"โรงเรือนนี้ยังไม่ได้ผูกกับอุปกรณ์ (ตั้งค่าที่หน้าจัดการฟาร์ม)\");\n        if (typeof b.on !== \"boolean\") throw fail(400, \"ต้องระบุ on เป็น true/false\");\n        let toManual = false;\n        if (c.light_mode === \"auto\") {           // กดเองระหว่างตั้งเวลา = เลิกตั้งเวลา ไม่งั้นตัวตั้งเวลาจะสั่งกลับ\n            await scf.db.update(\"coops\", \"id=eq.\" + c.id, { light_mode: \"manual\" });\n            c.light_mode = \"manual\";\n            toManual = true;\n        }\n        await audit(\"light\", c.farm_id, { coop_id: c.id, coop: c.name, on: b.on, to_manual: toManual || undefined });\n        return done({ ok: true, to_manual: toManual }, {\n            mqtt: { topic: lightTopic(c), payload: b.on ? \"ON\" : \"OFF\", retain: true, qos: 1 },\n            reload: toManual,\n        });\n    }\n\n    if (R === \"settings\") {\n        need(\"coop_settings\", c.farm_id, c.id);\n        if (![\"manual\", \"auto\"].includes(b.light_mode)) throw fail(400, \"โหมดไฟต้องเป็น manual หรือ auto\");\n        if (!isTime(b.light_on) || !isTime(b.light_off)) throw fail(400, \"เวลาต้องเป็นรูปแบบ HH:MM\");\n        await scf.db.update(\"coops\", \"id=eq.\" + c.id, { light_mode: b.light_mode, light_on: b.light_on, light_off: b.light_off });\n        await audit(\"light_schedule\", c.farm_id, { coop_id: c.id, coop: c.name, mode: b.light_mode, on: b.light_on, off: b.light_off });\n        return done({ ok: true }, { reload: true });\n    }\n\n    if (R === \"flock\") {\n        need(\"flock\", c.farm_id, c.id);\n        const birds = Number(b.birds);\n        if (!isDate(b.started_on) || b.started_on > todayStr) throw fail(400, \"วันลงไก่ไม่ถูกต้อง (ห้ามเป็นวันในอนาคต)\");\n        if (!Number.isInteger(birds) || birds < 1 || birds > 1000000) throw fail(400, \"จำนวนไก่ต้องเป็นจำนวนเต็ม 1–1,000,000\");\n        if (c.capacity && birds > c.capacity) throw fail(400, \"เกินความจุโรงเรือน (\" + c.capacity.toLocaleString() + \" ตัว)\");\n        const breed = text(b.breed, 40, \"สายพันธุ์\", false);\n        await scf.db.rpc(\"start_flock\", { p_coop: c.id, p_started_on: b.started_on, p_birds: birds, p_breed: breed || \"\" });\n        await audit(\"flock_start\", c.farm_id, { coop_id: c.id, coop: c.name, started_on: b.started_on, birds, breed });\n        return done({ ok: true }, { reload: true });\n    }\n\n    if (R === \"flock-end\") {\n        need(\"flock\", c.farm_id, c.id);\n        if (!c.flock) throw fail(409, \"โรงเรือนนี้ไม่มีรุ่นที่กำลังเลี้ยง\");\n        await scf.db.rpc(\"end_flock\", { p_coop: c.id });\n        await audit(\"flock_end\", c.farm_id, { coop_id: c.id, coop: c.name, alive: c.flock.alive, age_days: c.flock.age_days });\n        return done({ ok: true }, { reload: true });\n    }\n\n    if (R === \"daily-log\") {\n        need(\"daily_log\", c.farm_id, c.id);\n        if (!c.flock || c.flock.id !== scf.int(b.flock_id)) throw fail(409, \"รุ่นไก่ไม่ตรงกับปัจจุบัน ลองรีเฟรชหน้า\");\n        if (!isDate(b.log_date) || b.log_date > todayStr || b.log_date < c.flock.started_on) throw fail(400, \"วันที่ต้องอยู่ระหว่างวันลงไก่ถึงวันนี้\");\n        const deaths = Number(b.deaths || 0), feed = Number(b.feed_kg || 0);\n        const w = b.avg_weight_g === \"\" || b.avg_weight_g == null ? null : Number(b.avg_weight_g);\n        if (!Number.isInteger(deaths) || deaths < 0 || deaths > c.flock.birds) throw fail(400, \"จำนวนไก่ตายต้องเป็นจำนวนเต็ม 0 ถึงจำนวนที่ลง\");\n        if (!Number.isFinite(feed) || feed < 0 || feed > 100000) throw fail(400, \"อาหารต้องเป็นตัวเลข 0–100,000 กก.\");\n        if (w !== null && !(w > 0 && w <= 10000)) throw fail(400, \"น้ำหนักเฉลี่ยต้องอยู่ระหว่าง 1–10,000 กรัม\");\n        await scf.db.upsert(\"daily_logs\", { flock_id: c.flock.id, coop_id: c.id, log_date: b.log_date, deaths, feed_kg: feed,\n            avg_weight_g: w, note: text(b.note, 200, \"หมายเหตุ\", false), created_by: user.id }, \"flock_id,log_date\");\n        await audit(\"daily_log\", c.farm_id, { coop_id: c.id, coop: c.name, log_date: b.log_date, deaths, feed_kg: feed, avg_weight_g: w });\n        return done({ ok: true }, { reload: true });\n    }\n    throw fail(404, \"ไม่รู้จัก \" + R);\n});\nreturn null;\n",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 860,
+        "y": 220,
+        "wires": [
+            [
+                "scfhs002c"
+            ],
+            [
+                "scflo002f"
+            ],
+            [
+                "scflo0030"
+            ],
+            [
+                "scflo0031"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0034",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "จัดการฟาร์ม/โรงเรือน/อุปกรณ์",
+        "func": "// ---- ส่วนกลางของทุก API (ตรวจสิทธิ์ + ตัวช่วย) ----\nconst scf = global.get(\"scf\");\nconst user = msg.user, q = msg.q, b = msg.body, R = msg.resource;\nconst farms = global.get(\"farms\") || [], coops = global.get(\"coops\") || [], gateways = global.get(\"gateways\") || [];\nconst isAdmin = user.role === \"admin\";\nconst fail = scf.fail;\n// สิทธิ์: ไม่ผ่าน = 403 ทันที (ผู้ใช้ที่ไม่ใช่ admin ทำได้เฉพาะในฟาร์มของตัวเอง · ผู้ดูแลโรงเรือนเฉพาะโรงเรือนของตัวเอง)\nconst need = (perm, farmId, coopId) => { if (!scf.can(user, perm, farmId, coopId)) throw fail(403, \"คุณไม่มีสิทธิ์ทำรายการนี้\"); };\n// ฟาร์มที่คำขอนี้หมายถึง: admin เลือกได้ (ไม่ระบุ = ฟาร์มแรกที่เปิดใช้งาน), คนอื่นได้ฟาร์มตัวเองเท่านั้น (ขอฟาร์มอื่น = 403)\nconst farmParam = () => {\n    const asked = scf.int(q.farm_id != null ? q.farm_id : b.farm_id);\n    if (!isAdmin) {\n        if (asked && asked !== user.farm_id) throw fail(403, \"คุณเข้าถึงได้เฉพาะฟาร์มของตัวเอง\");\n        return user.farm_id;\n    }\n    return asked || (farms.find(f => f.active) || farms[0] || {}).id || null;\n};\nconst farmOf = id => { const f = farms.find(f => f.id === scf.int(id)); if (!f || !scf.seesFarm(user, f.id)) throw fail(404, \"ไม่พบฟาร์ม\"); return f; };\n// โรงเรือนในฟาร์มอื่น (หรือที่ผู้ดูแลโรงเรือนไม่ได้ดูแล) ตอบว่า \"ไม่พบ\" (ไม่บอกว่ามีอยู่)\nconst coopOf = id => { const c = coops.find(c => c.id === scf.int(id)); if (!c || !scf.seesCoop(user, c)) throw fail(404, \"ไม่พบโรงเรือน\"); return c; };\nconst text = (v, max, label, required = true) => {\n    const s = String(v == null ? \"\" : v).trim();\n    if (required && !s) throw fail(400, \"กรุณากรอก\" + label);\n    if (s.length > max) throw fail(400, label + \"ยาวเกิน \" + max + \" ตัวอักษร\");\n    return s || null;\n};\nconst isDate = s => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s)) && !isNaN(Date.parse(s));\nconst isTime = s => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s));\nconst pad = n => String(n).padStart(2, \"0\");\nconst todayStr = (() => { const d = new Date(); return d.getFullYear() + \"-\" + pad(d.getMonth() + 1) + \"-\" + pad(d.getDate()); })();\nconst since = () => q.since && !isNaN(Date.parse(q.since)) ? new Date(q.since).toISOString() : null;\nconst limit = (d, max = 1000) => Math.min(Math.max(parseInt(q.limit, 10) || d, 1), max);\nconst audit = (action, farmId, detail) => scf.db.insert(\"audit_log\", {\n    user_id: user.id, username: user.username, farm_id: farmId == null ? null : farmId, action, detail: detail == null ? null : detail,\n}).catch(e => node.warn(\"audit: \" + e.message));\n// outputs: 1 ตอบเว็บ, 2 MQTT (คำสั่งไฟ), 3 โหลดข้อมูลฟาร์มใหม่, 4 ส่งข้อมูลสด\nconst done = (body, extra = {}) => { node.send([scf.reply(msg, 200, body), extra.mqtt || null, extra.reload ? { payload: \"reload\" } : null, extra.live || null]); };\nconst run = async fn => {\n    try { await fn(); }\n    catch (e) {\n        if (!e.http && e.code !== \"23505\") node.error(R + \": \" + e.message);\n        node.send([scf.errorReply(msg, e), null, null, null]);\n    }\n};\n// ---- จบส่วนกลาง ----\n\n// POST: farm · farm-delete · coop · coop-delete · gateway · gateway-password\n//   farm              ผู้ดูแลระบบ: เพิ่มฟาร์ม (พร้อม gateway + ผู้ดูแลฟาร์มคนแรก ในครั้งเดียว: ทุกฟาร์มมีคนดูแลตั้งแต่เกิด) / แก้ไข\n//   farm-delete       ผู้ดูแลระบบ: ลบฟาร์มทั้งฟาร์ม (โรงเรือน+ประวัติ, gateway+บัญชี MQTT, ผู้ดูแล/ผู้ดูของฟาร์ม) ต้องพิมพ์ชื่อยืนยัน\n//   coop              ผู้ดูแลฟาร์ม (ฟาร์มตัวเอง) หรือผู้ดูแลระบบ: เพิ่ม/แก้โรงเรือน + ผูกกับหมายเลขโหนดของ gateway\n//                     เพิ่มใหม่ได้ครบในครั้งเดียว: เวลาไฟ และรุ่นไก่ (flock)\n//   coop-delete       ผู้ดูแลระบบ: ลบโรงเรือนพร้อมประวัติทั้งหมด\n//   gateway, gateway-password   ผู้ดูแลระบบ\n//   board-kit         ค่าสำหรับแฟลชบอร์ดแบบพร้อมใช้ (หน้า \"ตั้งค่าบอร์ด\"): ตัวลูก = ผู้ดูแลฟาร์มขึ้นไป · ตัวแม่ (ออกรหัส MQTT ใหม่) = ผู้ดูแลระบบ\n//                     โรงเรือนที่ยังไม่ผูกบอร์ดจะได้ NODE_ID ที่ว่างของ gateway นั้นให้อัตโนมัติ\n// ตรวจทุกช่องก่อนเขียนอะไรลงฐานข้อมูล ถ้าขั้นหลังพลาดจะลบสิ่งที่เพิ่งสร้างทิ้ง\n// MQTT username: gw<farm>-<n> unique, also the topic prefix scf/<username>/\nconst nextGwUser = fid => { let n = gateways.filter(g => g.farm_id === fid).length + 1, u; do { u = \"gw\" + fid + \"-\" + n++; } while (gateways.some(g => g.mqtt_user === u)); return u; };\n// a new account checked completely before anything is written\n// ชื่อผู้ใช้เว้นว่างได้: ระบบตั้งให้เองหลังรู้หมายเลขฟาร์ม (เช่น farm2.keeper1)\nconst newAccount = async (k, label) => {\n    const username = String(k.username || \"\").trim().toLowerCase() || null;\n    if (username && !/^[a-z0-9._-]{3,32}$/.test(username)) throw fail(400, \"ชื่อผู้ใช้ของ\" + label + \"ใช้ a-z 0-9 . _ - ยาว 3–32 ตัว\");\n    if (username && (await scf.db.get(\"users?select=id&username=eq.\" + username)).length) throw fail(409, \"ชื่อผู้ใช้ \\\"\" + username + \"\\\" มีคนใช้แล้ว\");\n    let password = k.password ? String(k.password) : null, generated = false;\n    if (password) { const p = scf.passwordProblem(password); if (p) throw fail(400, p); }\n    else { password = scf.randomPassword(10) + \"7\"; generated = true; }\n    return { username, display_name: text(k.display_name, 60, \"ชื่อ\" + label), password, generated };\n};\n\nawait run(async () => {\n    if (msg.method !== \"POST\") throw fail(405, \"method not allowed\");\n\n    if (R === \"farm\") {\n        need(\"farm_manage\", null);\n        const row = { name: text(b.name, 80, \"ชื่อฟาร์ม\"), location: text(b.location, 120, \"ที่ตั้ง\", false) };\n        if (b.id) {\n            const f = farmOf(b.id);\n            if (typeof b.active === \"boolean\") row.active = b.active;\n            await scf.db.update(\"farms\", \"id=eq.\" + f.id, row);\n            await audit(\"farm_update\", f.id, row);\n            return done({ ok: true, id: f.id }, { reload: true });\n        }\n        // ---- ฟาร์มใหม่ = ฟาร์ม + gateway + ผู้ดูแลฟาร์มคนแรก + โรงเรือน N หลัง (ผูกโหนด 1..N ของ gateway)\n        const k = Object.assign({}, b.keeper || {});\n        if (!String(k.display_name || \"\").trim()) k.display_name = (\"ผู้ดูแล\" + row.name).slice(0, 60);   // ไม่กรอก = ตั้งชื่อให้\n        const keeper = await newAccount(k, \"ผู้ดูแลฟาร์ม\");\n        const nCoops = b.coops == null || b.coops === \"\" ? 0 : Number(b.coops);\n        if (!Number.isInteger(nCoops) || nCoops < 0 || nCoops > 20) throw fail(400, \"จำนวนโรงเรือนต้องเป็น 0–20 หลัง (gateway 1 ตัวรองรับ 20 โรง)\");\n        const gwName = text(b.gateway_name, 60, \"ชื่อ gateway\", false) || \"Gateway \" + row.name.slice(0, 50);\n        const farmKey = scf.randomHex(16);\n        const f = (await scf.db.insert(\"farms\", Object.assign({}, row, { farm_key: farmKey })))[0];\n        let g = null;\n        try {\n            const mqttUser = nextGwUser(f.id);\n            g = (await scf.db.insert(\"gateways\", { farm_id: f.id, name: gwName, mqtt_user: mqttUser }))[0];\n            if (!keeper.username) keeper.username = scf.nextUsername(scf.usernamePrefix(\"keeper\", f.id), (await scf.db.get(\"users?select=username\")).map(u => u.username));\n            await scf.db.insert(\"users\", { username: keeper.username, display_name: keeper.display_name, password_hash: scf.hashPassword(keeper.password),\n                                           role: \"keeper\", farm_id: f.id, active: true });\n            if (nCoops) await scf.db.insert(\"coops\", Array.from({ length: nCoops }, (_, i) =>\n                ({ farm_id: f.id, name: \"โรงเรือน \" + (i + 1), gateway_id: g.id, node_id: i + 1 })));\n        } catch (e) {\n            await scf.db.rpc(\"delete_farm\", { p_farm: f.id }).catch(x => node.warn(\"rollback: \" + x.message));   // ไม่เหลืออะไรค้าง\n            throw e;\n        }\n        const password = scf.randomPassword(20);\n        scf.mqttAccount(\"add\", g.mqtt_user, password);\n        await audit(\"farm_create\", f.id, Object.assign({ gateway: g.mqtt_user, keeper: keeper.username, coops: nCoops }, row));\n        return done({ ok: true, id: f.id, mqtt_user: g.mqtt_user, mqtt_password: password, farm_key: farmKey,\n                      username: keeper.username, keeper_name: keeper.display_name, coops: nCoops,\n                      temp_password: keeper.generated ? keeper.password : undefined }, { reload: true });\n    }\n\n    if (R === \"farm-delete\") {\n        need(\"farm_manage\", null);\n        const f = farmOf(b.id);\n        if (String(b.confirm || \"\").trim() !== f.name) throw fail(400, \"พิมพ์ชื่อฟาร์มให้ตรงเพื่อยืนยันการลบ\");\n        const gws = gateways.filter(g => g.farm_id === f.id);\n        const all = global.get(\"users\") || {};\n        const people = Object.values(all).filter(u => u.farm_id === f.id && u.role !== \"admin\");\n        await scf.db.rpc(\"delete_farm\", { p_farm: f.id });            // ทั้งหมดในครั้งเดียว: สำเร็จทั้งหมดหรือไม่เปลี่ยนอะไรเลย\n        for (const g of gws) { try { scf.mqttAccount(\"del\", g.mqtt_user); } catch (e) { node.warn(\"mqtt del \" + g.mqtt_user + \": \" + e.message); } }\n        for (const u of people) delete all[u.id];                      // token และข้อมูลสดของคนในฟาร์มนี้หยุดทันที\n        global.set(\"users\", all);\n        await audit(\"farm_delete\", null, { farm: f.name, farm_id: f.id, coops: coops.filter(c => c.farm_id === f.id).length,\n                                           gateways: gws.map(g => g.mqtt_user), users: people.map(u => u.username) });\n        return done({ ok: true }, { reload: true });\n    }\n\n    if (R === \"coop\") {\n        const existing = b.id ? coopOf(b.id) : null;\n        const fid = existing ? existing.farm_id : farmParam();          // ย้ายโรงเรือนข้ามฟาร์มไม่ได้\n        if (!fid) throw fail(400, \"ต้องระบุฟาร์ม\");\n        need(\"coop_manage\", fid);\n        if (!farmOf(fid).active) throw fail(409, \"ฟาร์มนี้ถูกปิดใช้งาน\");\n        const row = { farm_id: fid, name: text(b.name, 60, \"ชื่อโรงเรือน\") };\n        const cap = b.capacity === \"\" || b.capacity == null ? null : Number(b.capacity);\n        if (cap !== null && !(Number.isInteger(cap) && cap >= 1 && cap <= 1000000)) throw fail(400, \"ความจุต้องเป็นจำนวนเต็ม 1–1,000,000\");\n        row.capacity = cap;\n        const gid = b.gateway_id === \"\" || b.gateway_id == null ? null : scf.int(b.gateway_id);\n        if (gid) {\n            const g = gateways.find(g => g.id === gid);\n            if (!g || g.farm_id !== fid) throw fail(400, \"gateway ต้องเป็นของฟาร์มเดียวกัน\");\n            if (!g.active) throw fail(400, \"gateway นี้ถูกปิดใช้งาน\");\n            const node = Number(b.node_id);\n            if (!Number.isInteger(node) || node < 1 || node > 20) throw fail(400, \"หมายเลขโหนดต้องเป็น 1–20 (ตรงกับ NODE_ID ในบอร์ดลูก)\");\n            const clash = coops.find(c => c.active && c.gateway_id === gid && c.node_id === node && (!existing || c.id !== existing.id));\n            if (clash) throw fail(409, \"โหนด \" + node + \" ใช้กับ \\\"\" + clash.name + \"\\\" อยู่แล้ว\");\n            row.gateway_id = gid; row.node_id = node;\n        } else { row.gateway_id = null; row.node_id = null; }\n        if (typeof b.active === \"boolean\") row.active = b.active;\n        if (existing) {\n            if (row.active === false && existing.active && existing.flock) throw fail(409, \"จบรุ่นไก่ในโรงเรือนนี้ก่อนปิดใช้งาน\");\n            await scf.db.update(\"coops\", \"id=eq.\" + existing.id, row);\n            await audit(\"coop_update\", fid, Object.assign({ coop_id: existing.id }, row));\n            return done({ ok: true, id: existing.id }, { reload: true });\n        }\n\n        // ---- เพิ่มใหม่: ตรวจรายละเอียดที่เหลือให้ครบก่อน\n        const mode = b.light_mode || \"manual\";\n        if (![\"manual\", \"auto\"].includes(mode)) throw fail(400, \"โหมดไฟต้องเป็น manual หรือ auto\");\n        row.light_mode = mode;\n        if (b.light_on != null || b.light_off != null) {\n            if (!isTime(b.light_on) || !isTime(b.light_off)) throw fail(400, \"เวลาเปิด-ปิดไฟต้องเป็นรูปแบบ HH:MM\");\n            row.light_on = b.light_on; row.light_off = b.light_off;\n        }\n        // ผู้ดูแลโรงเรือนของโรงใหม่ (ไม่บังคับ): ต้องเป็นผู้ดูแลโรงเรือนของฟาร์มนี้\n        const allUsers = global.get(\"users\") || {};\n        const caretakers = [...new Set((Array.isArray(b.caretaker_ids) ? b.caretaker_ids : []).map(scf.int).filter(Boolean))].map(id => {\n            const u = allUsers[id];\n            if (!u || u.role !== \"coop_keeper\" || u.farm_id !== fid) throw fail(400, \"ผู้ดูแลโรงเรือนที่เลือกต้องอยู่ในฟาร์มนี้\");\n            return u;\n        });\n        if (caretakers.length) need(\"staff_manage\", fid);\n        let flock = null;\n        if (b.flock) {\n            need(\"flock\", fid);\n            const birds = Number(b.flock.birds);\n            if (!isDate(b.flock.started_on) || b.flock.started_on > todayStr) throw fail(400, \"วันลงไก่ไม่ถูกต้อง (ห้ามเป็นวันในอนาคต)\");\n            if (!Number.isInteger(birds) || birds < 1 || birds > 1000000) throw fail(400, \"จำนวนไก่ต้องเป็นจำนวนเต็ม 1–1,000,000\");\n            if (cap && birds > cap) throw fail(400, \"จำนวนไก่เกินความจุโรงเรือน (\" + cap.toLocaleString() + \" ตัว)\");\n            flock = { started_on: b.flock.started_on, birds, breed: text(b.flock.breed, 40, \"สายพันธุ์\", false) || \"\" };\n        }\n        const c = (await scf.db.insert(\"coops\", row))[0];\n        try {\n            if (flock) await scf.db.rpc(\"start_flock\", { p_coop: c.id, p_started_on: flock.started_on, p_birds: flock.birds, p_breed: flock.breed });\n        } catch (e) {\n            await scf.db.rpc(\"delete_coop\", { p_coop: c.id }).catch(x => node.warn(\"rollback: \" + x.message));\n            throw e;\n        }\n        if (caretakers.length) {\n            try {\n                await scf.db.insert(\"user_coops\", caretakers.map(u => ({ user_id: u.id, coop_id: c.id })));\n                for (const u of caretakers) u.coop_ids = [...(u.coop_ids || []), Number(c.id)];   // มีผลทันที\n                global.set(\"users\", allUsers);\n            } catch (e) { node.warn(\"caretakers: \" + e.message); }\n        }\n        await audit(\"coop_create\", fid, Object.assign({ coop_id: c.id, flock: flock ? flock.birds : undefined,\n            caretakers: caretakers.length ? caretakers.map(u => u.username) : undefined }, row));\n        return done({ ok: true, id: c.id }, { reload: true });\n    }\n\n    if (R === \"coop-delete\") {\n        const c = coopOf(b.id);\n        need(\"coop_delete\", c.farm_id);\n        if (String(b.confirm || \"\").trim() !== c.name) throw fail(400, \"พิมพ์ชื่อโรงเรือนให้ตรงเพื่อยืนยันการลบ\");\n        await scf.db.rpc(\"delete_coop\", { p_coop: c.id });\n        await audit(\"coop_delete\", c.farm_id, { coop_id: c.id, coop: c.name, had_flock: !!c.flock || undefined });\n        return done({ ok: true }, { reload: true });\n    }\n\n    if (R === \"gateway\") {\n        need(\"gateway_manage\", null);\n        if (b.id) {\n            const g = gateways.find(g => g.id === scf.int(b.id));\n            if (!g) throw fail(404, \"ไม่พบ gateway\");\n            const row = { name: text(b.name, 60, \"ชื่อ gateway\") };\n            if (typeof b.active === \"boolean\") row.active = b.active;\n            await scf.db.update(\"gateways\", \"id=eq.\" + g.id, row);\n            if (row.active === false && g.active) scf.mqttAccount(\"del\", g.mqtt_user);   // ตัดสิทธิ์ MQTT ทันที\n            await audit(\"gateway_update\", g.farm_id, Object.assign({ gateway: g.mqtt_user }, row));\n            return done({ ok: true, id: g.id }, { reload: true });\n        }\n        const fid = farmOf(b.farm_id).id;\n        if (!farmOf(fid).active) throw fail(409, \"ฟาร์มนี้ถูกปิดใช้งาน\");\n        const mqttUser = nextGwUser(fid);\n        const g = (await scf.db.insert(\"gateways\", { farm_id: fid, name: text(b.name, 60, \"ชื่อ gateway\"), mqtt_user: mqttUser }))[0];\n        const password = scf.randomPassword(20);\n        scf.mqttAccount(\"add\", mqttUser, password);\n        await audit(\"gateway_create\", fid, { gateway: mqttUser });\n        const fk = ((await scf.db.get(\"farms?select=farm_key&id=eq.\" + fid))[0] || {}).farm_key || null;\n        return done({ ok: true, id: g.id, mqtt_user: mqttUser, mqtt_password: password, farm_key: fk }, { reload: true });\n    }\n\n    if (R === \"board-kit\") {\n        const g = gateways.find(g => g.id === scf.int(b.gateway_id));\n        if (!g || !scf.seesFarm(user, g.farm_id)) throw fail(404, \"ไม่พบ gateway\");\n        const fid = g.farm_id;\n        need(\"coop_manage\", fid);\n        if (!g.active) throw fail(409, \"gateway นี้ถูกปิดใช้งาน: เปิดใช้งานก่อน\");\n        const withGw = b.gateway === true;\n        if (withGw) need(\"gateway_manage\", fid);\n        // กุญแจฟาร์ม: เก็บไว้ในฐานข้อมูล · ยังไม่มี = สร้างได้เฉพาะตอนแฟลชตัวแม่ด้วย (ไม่งั้นตัวแม่กับตัวลูกกุญแจไม่ตรงกัน)\n        let key = ((await scf.db.get(\"farms?select=farm_key&id=eq.\" + fid))[0] || {}).farm_key || null, newKey = false;\n        if (!key && !withGw) throw fail(409, \"ฟาร์มนี้ยังไม่มีกุญแจฟาร์มในระบบ: ครั้งแรกต้องแฟลชตัวแม่พร้อมกัน (ผู้ดูแลระบบเลือก \\\"ตัวแม่\\\" ด้วย)\");\n        // โรงเรือนที่เลือก: ต้องอยู่ในฟาร์มนี้ · ยังไม่ผูกบอร์ด = ได้ NODE_ID ที่ว่างของ gateway นี้\n        const farmCoops = coops.filter(c => c.farm_id === fid && c.active);\n        const chosen = [...new Set((Array.isArray(b.coop_ids) ? b.coop_ids : []).map(scf.int).filter(Boolean))].map(id => {\n            const c = farmCoops.find(c => c.id === id);\n            if (!c) throw fail(400, \"โรงเรือนที่เลือกต้องอยู่ในฟาร์มนี้และใช้งานอยู่\");\n            if (c.gateway_id && c.gateway_id !== g.id) throw fail(400, c.name + \" ผูกกับ gateway อื่นอยู่: เลือก gateway นั้นแทน\");\n            return c;\n        });\n        if (!withGw && !chosen.length) throw fail(400, \"เลือกตัวแม่ หรือโรงเรือนอย่างน้อย 1 โรง\");\n        const used = new Set(farmCoops.filter(c => c.gateway_id === g.id).map(c => c.node_id));\n        const free = chosen.filter(c => !c.gateway_id);\n        const nodeOf = {};\n        for (const c of free) {\n            let n = 1; while (used.has(n)) n++;\n            if (n > 20) throw fail(409, \"gateway นี้มีบอร์ดลูกครบ 20 ตัวแล้ว: เพิ่ม gateway อีกตัว\");\n            used.add(n); nodeOf[c.id] = n;\n        }\n        for (const c of free) await scf.db.update(\"coops\", \"id=eq.\" + c.id, { gateway_id: g.id, node_id: nodeOf[c.id] });\n        if (!key) { key = scf.randomHex(16); await scf.db.update(\"farms\", \"id=eq.\" + fid, { farm_key: key }); newKey = true; }\n        let src;\n        try { src = scf.firmwareSources(); }\n        catch (e) { throw fail(500, \"อ่านไฟล์ firmware ไม่ได้: รัน start.sh ใหม่ (docker-compose.yml ต้องมี ./firmware:/firmware:ro)\"); }\n        let mqttPassword = null;\n        if (withGw) { mqttPassword = scf.randomPassword(20); scf.mqttAccount(\"add\", g.mqtt_user, mqttPassword); }   // รหัสเดิมใช้ไม่ได้ทันที\n        // ที่อยู่ server สำหรับตัวแม่: IP ใน Wi-Fi จาก start.sh หรือชื่อเครื่องที่เปิดเว็บอยู่\n        const ip = String(env.get(\"SERVER_IP\") || \"\"), reqHost = String((msg.req && msg.req.headers && msg.req.headers.host) || \"\").split(\":\")[0];\n        const host = /^[0-9.]{7,15}$/.test(ip) ? ip : (reqHost && !/^(localhost|127\\.0\\.0\\.1)$/.test(reqHost) ? reqHost : null);\n        const nodes = chosen.map(c => ({ coop_id: c.id, coop: c.name, node_id: c.gateway_id ? c.node_id : nodeOf[c.id] }));\n        await audit(\"board_kit\", fid, { gateway: g.mqtt_user, new_mqtt_password: withGw || undefined, new_farm_key: newKey || undefined,\n            nodes: nodes.map(x => x.node_id), bound: free.length || undefined });\n        return done({ ok: true, farm_id: fid, gateway: { id: g.id, name: g.name, mqtt_user: g.mqtt_user, mqtt_password: mqttPassword },\n            farm_key: key, new_farm_key: newKey, mqtt_host: host, mqtt_port: 1883, nodes, sources: src }, { reload: free.length > 0 });\n    }\n\n    if (R === \"gateway-password\") {\n        need(\"gateway_manage\", null);\n        const g = gateways.find(g => g.id === scf.int(b.id));\n        if (!g) throw fail(404, \"ไม่พบ gateway\");\n        if (!g.active) throw fail(409, \"เปิดใช้งาน gateway ก่อน\");\n        const password = scf.randomPassword(20);\n        scf.mqttAccount(\"add\", g.mqtt_user, password);     // add = เขียนทับรหัสเดิม\n        const newKey = b.new_farm_key ? scf.randomHex(16) : null;\n        if (newKey) await scf.db.update(\"farms\", \"id=eq.\" + g.farm_id, { farm_key: newKey });   // บอร์ดทุกตัวในฟาร์มต้องแฟลชใหม่\n        await audit(\"gateway_password\", g.farm_id, { gateway: g.mqtt_user, new_farm_key: !!b.new_farm_key });\n        return done({ ok: true, id: g.id, mqtt_user: g.mqtt_user, mqtt_password: password, farm_key: newKey });\n    }\n    throw fail(404, \"ไม่รู้จัก \" + R);\n});\nreturn null;\n",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 860,
+        "y": 280,
+        "wires": [
+            [
+                "scfhs002c"
+            ],
+            [
+                "scflo002f"
+            ],
+            [
+                "scflo0030"
+            ],
+            [
+                "scflo0031"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0035",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "จัดการผู้ใช้",
+        "func": "// ---- ส่วนกลางของทุก API (ตรวจสิทธิ์ + ตัวช่วย) ----\nconst scf = global.get(\"scf\");\nconst user = msg.user, q = msg.q, b = msg.body, R = msg.resource;\nconst farms = global.get(\"farms\") || [], coops = global.get(\"coops\") || [], gateways = global.get(\"gateways\") || [];\nconst isAdmin = user.role === \"admin\";\nconst fail = scf.fail;\n// สิทธิ์: ไม่ผ่าน = 403 ทันที (ผู้ใช้ที่ไม่ใช่ admin ทำได้เฉพาะในฟาร์มของตัวเอง · ผู้ดูแลโรงเรือนเฉพาะโรงเรือนของตัวเอง)\nconst need = (perm, farmId, coopId) => { if (!scf.can(user, perm, farmId, coopId)) throw fail(403, \"คุณไม่มีสิทธิ์ทำรายการนี้\"); };\n// ฟาร์มที่คำขอนี้หมายถึง: admin เลือกได้ (ไม่ระบุ = ฟาร์มแรกที่เปิดใช้งาน), คนอื่นได้ฟาร์มตัวเองเท่านั้น (ขอฟาร์มอื่น = 403)\nconst farmParam = () => {\n    const asked = scf.int(q.farm_id != null ? q.farm_id : b.farm_id);\n    if (!isAdmin) {\n        if (asked && asked !== user.farm_id) throw fail(403, \"คุณเข้าถึงได้เฉพาะฟาร์มของตัวเอง\");\n        return user.farm_id;\n    }\n    return asked || (farms.find(f => f.active) || farms[0] || {}).id || null;\n};\nconst farmOf = id => { const f = farms.find(f => f.id === scf.int(id)); if (!f || !scf.seesFarm(user, f.id)) throw fail(404, \"ไม่พบฟาร์ม\"); return f; };\n// โรงเรือนในฟาร์มอื่น (หรือที่ผู้ดูแลโรงเรือนไม่ได้ดูแล) ตอบว่า \"ไม่พบ\" (ไม่บอกว่ามีอยู่)\nconst coopOf = id => { const c = coops.find(c => c.id === scf.int(id)); if (!c || !scf.seesCoop(user, c)) throw fail(404, \"ไม่พบโรงเรือน\"); return c; };\nconst text = (v, max, label, required = true) => {\n    const s = String(v == null ? \"\" : v).trim();\n    if (required && !s) throw fail(400, \"กรุณากรอก\" + label);\n    if (s.length > max) throw fail(400, label + \"ยาวเกิน \" + max + \" ตัวอักษร\");\n    return s || null;\n};\nconst isDate = s => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(s)) && !isNaN(Date.parse(s));\nconst isTime = s => /^([01]\\d|2[0-3]):[0-5]\\d$/.test(String(s));\nconst pad = n => String(n).padStart(2, \"0\");\nconst todayStr = (() => { const d = new Date(); return d.getFullYear() + \"-\" + pad(d.getMonth() + 1) + \"-\" + pad(d.getDate()); })();\nconst since = () => q.since && !isNaN(Date.parse(q.since)) ? new Date(q.since).toISOString() : null;\nconst limit = (d, max = 1000) => Math.min(Math.max(parseInt(q.limit, 10) || d, 1), max);\nconst audit = (action, farmId, detail) => scf.db.insert(\"audit_log\", {\n    user_id: user.id, username: user.username, farm_id: farmId == null ? null : farmId, action, detail: detail == null ? null : detail,\n}).catch(e => node.warn(\"audit: \" + e.message));\n// outputs: 1 ตอบเว็บ, 2 MQTT (คำสั่งไฟ), 3 โหลดข้อมูลฟาร์มใหม่, 4 ส่งข้อมูลสด\nconst done = (body, extra = {}) => { node.send([scf.reply(msg, 200, body), extra.mqtt || null, extra.reload ? { payload: \"reload\" } : null, extra.live || null]); };\nconst run = async fn => {\n    try { await fn(); }\n    catch (e) {\n        if (!e.http && e.code !== \"23505\") node.error(R + \": \" + e.message);\n        node.send([scf.errorReply(msg, e), null, null, null]);\n    }\n};\n// ---- จบส่วนกลาง ----\n\n// users (GET) · user (POST สร้าง/แก้) · user-delete (POST ลบ) · user-password (POST รีเซ็ต) · password (POST เปลี่ยนรหัสตัวเอง)\n// กติกา:\n//   - ผู้ดูแลระบบ: จัดการบัญชีได้ทุกบทบาททุกฟาร์ม\n//   - ผู้ดูแลฟาร์ม: เพิ่ม/แก้/ลบ/รีเซ็ตรหัส \"ผู้ดูแลโรงเรือน\" ของฟาร์มตัวเองเท่านั้น (บทบาทอื่นดูได้อย่างเดียว)\n//   - ผู้ดูแลโรงเรือนต้องได้รับโรงเรือนอย่างน้อย 1 หลัง และเป็นโรงเรือนในฟาร์มเดียวกันเท่านั้น (ฐานข้อมูลตรวจซ้ำ: user_coops)\n//   - ผู้ใช้ที่ไม่ใช่ admin อยู่ได้ฟาร์มเดียว (ฐานข้อมูลบังคับซ้ำอีกชั้น: users_one_farm)\n//   - ทุกฟาร์มต้องมีผู้ดูแลฟาร์มที่ใช้งานได้อย่างน้อย 1 คน: ลบ/ปิด/ย้าย/ลดสิทธิ์คนสุดท้ายไม่ได้\n//   - ห้ามแก้สิทธิ์/ฟาร์ม/ปิด/ลบบัญชีตัวเอง, ห้ามทำให้ไม่มี admin เหลือ\n//   - เปลี่ยนสิทธิ์/ฟาร์ม/สถานะ/รหัส หรือลบ = token เดิมของคนนั้นใช้ไม่ได้ทันที\nawait run(async () => {\n    const all = global.get(\"users\") || {};\n    const COLS = \"id,username,display_name,role,farm_id,active,session_version,last_login,locked_until,totp_enabled\";\n    const fresh = async id => (await scf.db.get(\"users?select=\" + COLS + \"&id=eq.\" + id))[0];\n    const countActive = async filter => (await scf.db.get(\"users?select=id&active=eq.true&\" + filter)).length;\n    // t = บัญชีก่อนแก้: ถ้าเป็นผู้ดูแลฟาร์มคนสุดท้ายของฟาร์มและกำลังจะไม่ใช่ -> ห้าม\n    const keepLastKeeper = async (t, stillKeeperThere) => {\n        if (t.role === \"keeper\" && t.active && !stillKeeperThere && await countActive(\"role=eq.keeper&farm_id=eq.\" + t.farm_id) <= 1) {\n            const f = farms.find(f => f.id === t.farm_id);\n            throw fail(409, (f ? f.name : \"ฟาร์มนี้\") + \" ต้องมีผู้ดูแลฟาร์มอย่างน้อย 1 คน: เพิ่มผู้ดูแลคนใหม่ก่อน\");\n        }\n    };\n    const keepLastAdmin = async (t, stillAdmin) => {\n        if (t.role === \"admin\" && t.active && !stillAdmin && await countActive(\"role=eq.admin\") <= 1) throw fail(409, \"ต้องมีผู้ดูแลระบบที่ใช้งานได้อย่างน้อย 1 คน\");\n    };\n    // ผู้ดูแลฟาร์มจัดการได้เฉพาะผู้ดูแลโรงเรือนในฟาร์มตัวเอง · admin จัดการได้ทุกคน\n    const manages = t => isAdmin ? scf.can(user, \"users_manage\", null)\n        : !!t && t.role === \"coop_keeper\" && scf.can(user, \"staff_manage\", t.farm_id);\n    const needManage = t => { if (!manages(t)) throw fail(403, \"คุณจัดการได้เฉพาะบัญชีผู้ดูแลโรงเรือนในฟาร์มของคุณ\"); };\n    // โรงเรือนที่มอบให้ผู้ดูแลโรงเรือน: อย่างน้อย 1 หลัง ทุกหลังอยู่ในฟาร์มนั้น\n    const coopList = (ids, farmId) => {\n        const list = [...new Set((Array.isArray(ids) ? ids : []).map(scf.int).filter(Boolean))];\n        if (!list.length) throw fail(400, \"เลือกโรงเรือนที่ผู้ดูแลโรงเรือนคนนี้ดูแลอย่างน้อย 1 หลัง\");\n        if (list.length > 200) throw fail(400, \"เลือกโรงเรือนได้ไม่เกิน 200 หลัง\");\n        for (const id of list) {\n            const c = coops.find(c => c.id === id);\n            if (!c || c.farm_id !== farmId) throw fail(400, \"โรงเรือนที่เลือกต้องอยู่ในฟาร์มเดียวกับผู้ดูแล\");\n        }\n        return list;\n    };\n    const saveCoops = async (uid, ids) => {\n        await scf.db.del(\"user_coops\", \"user_id=eq.\" + uid);\n        if (ids && ids.length) await scf.db.insert(\"user_coops\", ids.map(coop_id => ({ user_id: uid, coop_id })));\n    };\n    const coopNames = ids => (ids || []).map(id => (coops.find(c => c.id === id) || {}).name).filter(Boolean);\n\n    if (R === \"users\") {\n        if (msg.method !== \"GET\") throw fail(405, \"method not allowed\");\n        if (!scf.can(user, \"users_manage\", null) && !scf.can(user, \"staff_manage\", user.farm_id)) throw fail(403, \"คุณไม่มีสิทธิ์ทำรายการนี้\");\n        const fid = isAdmin && q.all ? null : farmParam();\n        const list = Object.values(all).filter(u => !fid || u.farm_id === fid || (isAdmin && u.role === \"admin\"));\n        return done(list.map(u => Object.assign(scf.publicUser(u), { editable: u.id !== user.id && manages(u), self: u.id === user.id,\n            coops: u.role === \"coop_keeper\" ? coopNames(scf.coopIdsOf(u)) : undefined })));\n    }\n    if (msg.method !== \"POST\") throw fail(405, \"method not allowed\");\n\n    if (R === \"password\") {                                 // เปลี่ยนรหัสผ่านของตัวเอง\n        const me = (await scf.db.get(\"users?select=id,password_hash,session_version&id=eq.\" + user.id))[0];\n        if (!scf.verifyPassword(String(b.old_password || \"\"), me.password_hash)) throw fail(400, \"รหัสผ่านเดิมไม่ถูกต้อง\");\n        const problem = scf.passwordProblem(b.new_password);\n        if (problem) throw fail(400, problem);\n        if (b.new_password === b.old_password) throw fail(400, \"รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม\");\n        const sv = (me.session_version || 0) + 1;\n        await scf.db.update(\"users\", \"id=eq.\" + user.id, { password_hash: scf.hashPassword(b.new_password), session_version: sv });\n        all[user.id] = Object.assign({}, all[user.id], { session_version: sv }); global.set(\"users\", all);\n        await audit(\"password_change\", user.farm_id, null);\n        return done({ ok: true, token: scf.signToken({ id: user.id, session_version: sv }) }, { reload: true });   // เครื่องอื่นต้อง login ใหม่\n    }\n\n    // ---- ยืนยันตัวตน 2 ขั้นของตัวเอง: setup -> enable (รหัสจากแอป) · backup (รหัสสำรองชุดใหม่) · disable (เฉพาะบทบาทที่ไม่บังคับ)\n    if (R === \"mfa\") {\n        const me = (await scf.db.get(\"users?select=*&id=eq.\" + user.id))[0];\n        const act = String(b.action || \"\");\n        const okCode = secret => {\n            const c = String(b.code || \"\").trim();\n            if (/^[0-9\\s]{6,7}$/.test(c)) return scf.verifyTotp(secret, c, me.totp_enabled ? me.totp_last_step : null);\n            return null;\n        };\n        if (act === \"setup\") {\n            if (me.totp_enabled) throw fail(409, \"เปิดใช้อยู่แล้ว\");\n            const secret = scf.newTotpSecret();\n            await scf.db.update(\"users\", \"id=eq.\" + me.id, { totp_secret: scf.sealSecret(secret), totp_enabled: false, totp_last_step: null });\n            return done({ ok: true, secret, otpauth: scf.otpauthUrl(me.username, secret) });\n        }\n        const secret = scf.openSecret(me.totp_secret);\n        if (!secret) throw fail(409, \"ยังไม่ได้ตั้งค่า: เริ่มใหม่อีกครั้ง\");\n        const step = okCode(secret);\n        if (step === null) throw fail(400, \"รหัส 6 หลักไม่ถูกต้อง: ดูรหัสล่าสุดในแอปแล้วลองใหม่\");\n        if (act === \"enable\" || act === \"backup\") {\n            if (act === \"backup\" && !me.totp_enabled) throw fail(409, \"ยังไม่ได้เปิดใช้\");\n            const bc = scf.newBackupCodes();\n            await scf.db.update(\"users\", \"id=eq.\" + me.id, { totp_enabled: true, totp_last_step: step, mfa_backup: bc.hashes });\n            const all = global.get(\"users\") || {}; if (all[me.id]) { all[me.id].totp_enabled = true; global.set(\"users\", all); }\n            await audit(act === \"enable\" ? \"mfa_enable\" : \"mfa_backup_codes\", me.farm_id, null);\n            return done({ ok: true, backup_codes: bc.codes });\n        }\n        if (act === \"disable\") {\n            if (scf.mfaRequired(me)) throw fail(403, \"บทบาทนี้ต้องใช้ยืนยันตัวตน 2 ขั้นเสมอ\");\n            if (!scf.verifyPassword(String(b.password || \"\"), me.password_hash)) throw fail(400, \"รหัสผ่านไม่ถูกต้อง\");\n            await scf.db.update(\"users\", \"id=eq.\" + me.id, { totp_secret: null, totp_enabled: false, totp_last_step: null, mfa_backup: null });\n            const all = global.get(\"users\") || {}; if (all[me.id]) { all[me.id].totp_enabled = false; global.set(\"users\", all); }\n            await audit(\"mfa_disable\", me.farm_id, null);\n            return done({ ok: true });\n        }\n        throw fail(400, \"action ไม่ถูกต้อง\");\n    }\n\n    if (R === \"user-mfa-reset\") {                           // ทำมือถือหาย: ล้างการตั้งค่า เข้าครั้งหน้าตั้งใหม่ (และออกจากระบบทุกเครื่อง)\n        const t = await fresh(scf.int(b.id));\n        if (!t) throw fail(404, \"ไม่พบผู้ใช้\");\n        if (t.id === user.id) throw fail(400, \"ปิด/ตั้งค่าของตัวเองที่เมนูบัญชี\");\n        needManage(t);\n        const sv = (t.session_version || 0) + 1;\n        await scf.db.update(\"users\", \"id=eq.\" + t.id, { totp_secret: null, totp_enabled: false, totp_last_step: null, mfa_backup: null, session_version: sv });\n        all[t.id] = Object.assign({}, all[t.id] || t, { totp_enabled: false, session_version: sv }); global.set(\"users\", all);\n        await audit(\"mfa_reset\", t.farm_id, { target: t.username });\n        return done({ ok: true }, { reload: true });\n    }\n\n    if (R === \"user-delete\") {\n        const t = await fresh(scf.int(b.id));\n        if (!t) throw fail(404, \"ไม่พบผู้ใช้\");\n        if (t.id === user.id) throw fail(400, \"ลบบัญชีของตัวเองไม่ได้\");\n        needManage(t);\n        await keepLastAdmin(t, false);\n        await keepLastKeeper(t, false);\n        await scf.db.del(\"users\", \"id=eq.\" + t.id);           // user_coops หายตาม (on delete cascade)\n        delete all[t.id]; global.set(\"users\", all);           // token และข้อมูลสดของคนนั้นหยุดทันที\n        await audit(\"user_delete\", t.farm_id, { target: t.username, role: t.role });\n        return done({ ok: true }, { reload: true });\n    }\n\n    if (R === \"user-password\") {                            // รีเซ็ตรหัสให้คนอื่น -> รหัสชั่วคราว แสดงครั้งเดียว\n        const t = await fresh(scf.int(b.id));\n        if (!t) throw fail(404, \"ไม่พบผู้ใช้\");\n        if (t.id === user.id) throw fail(400, \"เปลี่ยนรหัสของตัวเองที่เมนู \\\"เปลี่ยนรหัสผ่าน\\\"\");\n        needManage(t);\n        const temp = scf.randomPassword(10) + \"7\";\n        const sv = (t.session_version || 0) + 1;\n        await scf.db.update(\"users\", \"id=eq.\" + t.id, { password_hash: scf.hashPassword(temp), session_version: sv, failed_logins: 0, locked_until: null });\n        all[t.id] = Object.assign({}, all[t.id] || t, { session_version: sv }); global.set(\"users\", all);\n        await audit(\"user_password_reset\", t.farm_id, { target: t.username });\n        return done({ ok: true, username: t.username, temp_password: temp }, { reload: true });\n    }\n\n    if (R === \"user\") {\n        if (scf.int(b.id) === user.id) {                     // แก้บัญชีตัวเอง: ได้แค่ชื่อที่แสดง\n            if ((b.role && b.role !== user.role) || b.active === false || (b.farm_id != null && scf.int(b.farm_id) !== (user.farm_id || null)) || b.coop_ids !== undefined)\n                throw fail(400, \"แก้สิทธิ์ ฟาร์ม โรงเรือน หรือปิดบัญชีของตัวเองไม่ได้\");\n            const display_name = text(b.display_name, 60, \"ชื่อที่แสดง\");\n            await scf.db.update(\"users\", \"id=eq.\" + user.id, { display_name });\n            all[user.id] = Object.assign({}, all[user.id], { display_name }); global.set(\"users\", all);\n            await audit(\"user_update\", user.farm_id, { target: user.username, display_name });\n            return done({ ok: true, id: user.id }, { reload: true });\n        }\n        const role = String(b.role || \"\");\n        if (!scf.ROLES[role]) throw fail(400, \"บทบาทไม่ถูกต้อง\");\n        // ผู้ดูแลฟาร์ม: บทบาทต้องเป็นผู้ดูแลโรงเรือน และอยู่ฟาร์มตัวเองเสมอ\n        if (!isAdmin) {\n            if (!scf.can(user, \"staff_manage\", user.farm_id)) throw fail(403, \"คุณไม่มีสิทธิ์ทำรายการนี้\");\n            if (role !== \"coop_keeper\") throw fail(403, \"ผู้ดูแลฟาร์มเพิ่ม/แก้ได้เฉพาะบัญชีผู้ดูแลโรงเรือน\");\n            if (b.farm_id != null && scf.int(b.farm_id) !== user.farm_id) throw fail(403, \"คุณเข้าถึงได้เฉพาะฟาร์มของตัวเอง\");\n        } else need(\"users_manage\", null);\n        let farmId = null;\n        if (role !== \"admin\") {\n            const f = farms.find(f => f.id === (isAdmin ? scf.int(b.farm_id) : user.farm_id));\n            if (!f) throw fail(400, \"ผู้ใช้ที่ไม่ใช่ผู้ดูแลระบบต้องสังกัดฟาร์ม 1 ฟาร์ม\");\n            if (!f.active) throw fail(409, \"ฟาร์มนี้ถูกปิดใช้งาน\");\n            farmId = f.id;\n        }\n        const coopIds = role === \"coop_keeper\" ? coopList(b.coop_ids, farmId) : null;\n        const display = text(b.display_name, 60, \"ชื่อที่แสดง\");\n        const active = b.active !== false;\n\n        if (!b.id) {                                         // ---- สร้างบัญชีใหม่\n            // เว้นว่าง = ระบบตั้งให้ เช่น farm2.coop3\n            const username = String(b.username || \"\").trim().toLowerCase()\n                || scf.nextUsername(scf.usernamePrefix(role, farmId), (await scf.db.get(\"users?select=username\")).map(u => u.username));\n            if (!/^[a-z0-9._-]{3,32}$/.test(username)) throw fail(400, \"ชื่อผู้ใช้ใช้ a-z 0-9 . _ - ยาว 3–32 ตัว\");\n            let password = b.password ? String(b.password) : null, generated = false;\n            if (password) { const p = scf.passwordProblem(password); if (p) throw fail(400, p); }\n            else { password = scf.randomPassword(10) + \"7\"; generated = true; }\n            const u = (await scf.db.insert(\"users\", { username, display_name: display, password_hash: scf.hashPassword(password), role, farm_id: farmId, active }))[0];\n            if (coopIds) {\n                try { await saveCoops(u.id, coopIds); }\n                catch (e) { await scf.db.del(\"users\", \"id=eq.\" + u.id).catch(x => node.warn(\"rollback: \" + x.message)); throw e; }\n            }\n            all[u.id] = Object.assign({}, u, { coop_ids: coopIds || [] }); global.set(\"users\", all);\n            await audit(\"user_create\", farmId, { target: username, role, coops: coopIds ? coopNames(coopIds) : undefined });\n            return done({ ok: true, id: u.id, username, temp_password: generated ? password : undefined }, { reload: true });\n        }\n\n        // ---- แก้บัญชีเดิม\n        const t = await fresh(scf.int(b.id));\n        if (!t) throw fail(404, \"ไม่พบผู้ใช้\");\n        needManage(t);\n        const changes = { display_name: display, role, farm_id: farmId, active };\n        if (role !== t.role || farmId !== (t.farm_id || null) || active !== t.active) changes.session_version = (t.session_version || 0) + 1;\n        await keepLastAdmin(t, role === \"admin\" && active);\n        await keepLastKeeper(t, role === \"keeper\" && active && farmId === t.farm_id);\n        await scf.db.update(\"users\", \"id=eq.\" + t.id, changes);   // ไม่ใช่ผู้ดูแลโรงเรือนแล้ว/ย้ายฟาร์ม -> ฐานข้อมูลล้างโรงเรือนเดิมให้เอง\n        if (coopIds) await saveCoops(t.id, coopIds);\n        all[t.id] = Object.assign({}, t, changes, { coop_ids: coopIds || [] }); global.set(\"users\", all);   // มีผลกับ token ทันที ไม่ต้องรอโหลดใหม่\n        await audit(\"user_update\", farmId != null ? farmId : t.farm_id, { target: t.username, role, farm_id: farmId, active,\n            coops: coopIds ? coopNames(coopIds) : undefined });\n        return done({ ok: true, id: t.id }, { reload: true });\n    }\n    throw fail(404, \"ไม่รู้จัก \" + R);\n});\nreturn null;",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 860,
+        "y": 340,
+        "wires": [
+            [
+                "scfhs002c"
+            ],
+            [
+                "scflo002f"
+            ],
+            [
+                "scflo0030"
+            ],
+            [
+                "scflo0031"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0036",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "แยกตามหมวด",
+        "func": "// แยกคำขอตามหมวด (แต่ละหมวดตรวจสิทธิ์ของตัวเองอีกชั้น)\nconst map = { \"me\": 0, \"farms\": 0, \"farm-data\": 0, \"readings\": 0, \"led-events\": 0, \"alerts\": 0, \"daily-logs\": 0, \"audit\": 0,\n              \"light\": 1, \"lights-off\": 1, \"settings\": 1, \"flock\": 1, \"flock-end\": 1, \"daily-log\": 1,\n              \"farm\": 2, \"farm-delete\": 2, \"coop\": 2, \"coop-delete\": 2, \"gateway\": 2, \"gateway-password\": 2, \"board-kit\": 2,\n              \"users\": 3, \"user\": 3, \"mfa\": 3, \"user-mfa-reset\": 3, \"user-delete\": 3, \"user-password\": 3, \"password\": 3 };\nconst i = map[msg.resource];\nconst out = [null, null, null, null, null];\nif (i === undefined) out[4] = global.get(\"scf\").reply(msg, 404, { error: \"ไม่รู้จัก \" + msg.resource });\nelse out[i] = msg;\nreturn out;",
+        "outputs": 5,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 620,
+        "y": 250,
+        "wires": [
+            [
+                "scffn0032"
+            ],
+            [
+                "scffn0033"
+            ],
+            [
+                "scffn0034"
+            ],
+            [
+                "scffn0035"
+            ],
+            [
+                "scfhs002c"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0037",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "ตรวจ token",
+        "func": "// ทุกคำขอ /api/* (ยกเว้น login): ตรวจ token -> หาผู้ใช้ -> ยังใช้งานได้ไหม -> ส่งต่อพร้อม msg.user\n// token ใช้ไม่ได้ทันทีเมื่อ: ลายเซ็นผิด, หมดอายุ, บัญชีถูกปิด, เปลี่ยนรหัส/สิทธิ์/ฟาร์ม (session_version เปลี่ยน), ฟาร์มถูกปิด\n// outputs: 1 ผ่าน, 2 ไม่ผ่าน (ตอบกลับทันที)\nconst scf = global.get(\"scf\");\nif (!global.get(\"cacheReady\")) return [null, scf.reply(msg, 503, { error: \"ระบบกำลังเริ่มทำงาน ลองใหม่อีกครั้ง\" })];\nconst p = scf.verifyToken(scf.bearer(msg.req));\nconst u = p && (global.get(\"users\") || {})[p.uid];\nif (!p || !u || !u.active || (u.session_version || 0) !== p.sv) {\n    return [null, scf.reply(msg, 401, { error: \"กรุณาเข้าสู่ระบบใหม่\", code: \"auth\" })];\n}\nif (u.role !== \"admin\") {\n    const farm = (global.get(\"farms\") || []).find(f => f.id === u.farm_id);\n    if (!farm || !farm.active) return [null, scf.reply(msg, 403, { error: \"ฟาร์มของคุณถูกปิดใช้งาน\", code: \"auth\" })];\n}\nmsg.user = u;\nmsg.resource = msg.req.params.resource;\nmsg.method = msg.req.method;\nmsg.q = msg.req.query || {};\nmsg.body = (msg.method === \"POST\" && msg.payload && typeof msg.payload === \"object\") ? msg.payload : {};\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 250,
+        "wires": [
+            [
+                "scffn0036"
+            ],
+            [
+                "scfhs002c"
+            ]
+        ]
+    },
+    {
+        "id": "scfhi0038",
+        "type": "http in",
+        "z": "scf_tab_api",
+        "name": "",
+        "url": "/api/:resource",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 170,
+        "y": 230,
+        "wires": [
+            [
+                "scffn0037"
+            ]
+        ]
+    },
+    {
+        "id": "scfhi0039",
+        "type": "http in",
+        "z": "scf_tab_api",
+        "name": "",
+        "url": "/api/:resource",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 170,
+        "y": 270,
+        "wires": [
+            [
+                "scffn0037"
+            ]
+        ]
+    },
+    {
+        "id": "scffn003a",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "พร้อมใช้งานไหม",
+        "func": "// GET /health: บอกแค่ว่าระบบพร้อมไหม (ใช้โดย start.sh) ไม่มีข้อมูลฟาร์ม\nconst ready = !!global.get(\"cacheReady\");\nmsg.statusCode = ready ? 200 : 503;\nmsg.headers = { \"Content-Type\": \"application/json\", \"Cache-Control\": \"no-store\" };\nmsg.payload = JSON.stringify({ ok: ready });\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 360,
+        "wires": [
+            [
+                "scfhs002c"
+            ]
+        ]
+    },
+    {
+        "id": "scfhi003b",
+        "type": "http in",
+        "z": "scf_tab_api",
+        "name": "",
+        "url": "/health",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 170,
+        "y": 360,
+        "wires": [
+            [
+                "scffn003a"
+            ]
+        ]
+    },
+    {
+        "id": "scfdb003c",
+        "type": "debug",
+        "z": "scf_tab_api",
+        "name": "ข้อผิดพลาด",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 400,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "scfca003d",
+        "type": "catch",
+        "z": "scf_tab_api",
+        "name": "error ใด ๆ",
+        "scope": null,
+        "uncaught": false,
+        "x": 170,
+        "y": 420,
+        "wires": [
+            [
+                "scfdb003c"
+            ]
+        ]
+    },
+    {
+        "id": "scfmo003e",
+        "type": "mqtt out",
+        "z": "scf_tab_sim",
+        "name": "",
+        "topic": "",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "scf_broker",
+        "x": 640,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "scffn003f",
+        "type": "function",
+        "z": "scf_tab_sim",
+        "name": "ค่าปลอมทุกโรงเรือน",
+        "func": "// จำลองบอร์ด: ส่งค่าให้ทุกโรงเรือนที่ผูกกับ gateway แล้ว (ทุกฟาร์ม) ใช้ตอนไม่มีบอร์ดจริง\nconst out = [];\nfor (const c of global.get(\"coops\") || []) {\n    if (!c.active || !c.mqtt_user) continue;\n    const base = c.target.temp_ideal || 27;\n    const t = base + Math.sin(Date.now() / 60000 + c.id) * 2.5 + (Math.random() - .5);\n    const h = 62 + Math.cos(Date.now() / 90000 + c.id) * 6 + (Math.random() - .5) * 2;\n    out.push({ topic: \"scf/\" + c.mqtt_user + \"/node/\" + c.node_id + \"/telemetry\", payload: { temp: +t.toFixed(2), humidity: +h.toFixed(2) } });\n}\nconst gws = [...new Set((global.get(\"gateways\") || []).filter(g => g.active).map(g => g.mqtt_user))];\nfor (const g of gws) out.push({ topic: \"scf/\" + g + \"/status\", payload: \"online\", retain: true });\nreturn [out];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 100,
+        "wires": [
+            [
+                "scfmo003e"
+            ]
+        ]
+    },
+    {
+        "id": "scfin0040",
+        "type": "inject",
+        "z": "scf_tab_sim",
+        "name": "ทุก 10 วิ",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "10",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "5",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 170,
+        "y": 100,
+        "wires": [
+            [
+                "scffn003f"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0041",
+        "type": "function",
+        "z": "scf_tab_sim",
+        "name": "ตอบรับเหมือนโหนด",
+        "func": "// จำลองโหนด: รับ light/set แล้วตอบ light/state กลับ (เหมือน ACK จากบอร์ดจริง)\nconst m = /^scf\\/(gw[a-z0-9-]{1,30})\\/node\\/([0-9]{1,2})\\/light\\/set$/.exec(msg.topic);\nif (!m) return null;\nconst on = String(msg.payload).trim().toUpperCase() === \"ON\";\nreturn { topic: \"scf/\" + m[1] + \"/node/\" + m[2] + \"/light/state\", payload: on ? \"ON\" : \"OFF\", retain: true };",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 160,
+        "wires": [
+            [
+                "scfmo003e"
+            ]
+        ]
+    },
+    {
+        "id": "scfmi0042",
+        "type": "mqtt in",
+        "z": "scf_tab_sim",
+        "name": "scf/+/node/+/light/set",
+        "topic": "scf/+/node/+/light/set",
+        "qos": "1",
+        "datatype": "utf8",
+        "broker": "scf_broker",
+        "nl": false,
+        "rap": false,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 160,
+        "wires": [
+            [
+                "scffn0041"
+            ]
+        ]
+    },
+    {
+        "id": "scfhi0043",
+        "type": "http in",
+        "z": "scf_tab_api",
+        "name": "",
+        "url": "/auth/mfa",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 170,
+        "y": 160,
+        "wires": [
+            [
+                "scffn0044"
+            ]
+        ]
+    },
+    {
+        "id": "scffn0044",
+        "type": "function",
+        "z": "scf_tab_api",
+        "name": "ยืนยันตัวตน 2 ขั้น",
+        "func": "// POST /auth/mfa {mfa_token, code}: ขั้นที่ 2 ของการเข้าสู่ระบบ\n// - code = รหัส 6 หลักจากแอป Authenticator (ยอมเวลาคลาดเคลื่อน ±30 วิ, ใช้รหัสเดิมซ้ำไม่ได้) หรือรหัสสำรอง ABCD-EFGH (ใช้ได้ครั้งเดียว)\n// - ผิดนับรวมกับรหัสผ่าน: 5 ครั้งล็อก 5 นาที · IP เดียวผิดเกิน 20 ครั้ง/10 นาที บล็อก\n// - ตั้งค่าครั้งแรก: รหัสแรกที่ถูก = เปิดใช้ + ได้รหัสสำรอง 8 ชุด (แสดงครั้งเดียว)\nconst scf = global.get(\"scf\");\nconst b = (msg.payload && typeof msg.payload === \"object\") ? msg.payload : {};\nconst ip = String((msg.req.headers && msg.req.headers[\"x-forwarded-for\"]) || msg.req.ip || \"\").split(\",\")[0].trim();\nconst ipKey = \"ipfail_\" + ip;\nlet rec = flow.get(ipKey) || { n: 0, t: Date.now() };\nif (Date.now() - rec.t > 10 * 60000) rec = { n: 0, t: Date.now() };\nif (rec.n >= 20) return scf.reply(msg, 429, { error: \"ลองผิดหลายครั้งเกินไป กรุณารอ 10 นาที\" });\nconst audit = (action, u, detail) => scf.db.insert(\"audit_log\", { user_id: u.id, username: u.username, farm_id: u.farm_id, action, detail })\n    .catch(e => node.warn(\"audit: \" + e.message));\nconst expired = () => scf.reply(msg, 401, { error: \"หมดเวลายืนยันตัวตน กรุณาเข้าสู่ระบบใหม่\", code: \"mfa_expired\" });\ntry {\n    const p = scf.verifyToken(b.mfa_token, \"mfa\");\n    if (!p) return expired();\n    const u = (await scf.db.get(\"users?select=*&id=eq.\" + p.uid))[0];\n    if (!u || !u.active || (u.session_version || 0) !== p.sv) return expired();\n    if (u.locked_until && Date.parse(u.locked_until) > Date.now())\n        return scf.reply(msg, 423, { error: \"บัญชีถูกล็อกชั่วคราวเพราะใส่รหัสผิดหลายครั้ง ลองใหม่หลัง \" +\n            new Date(u.locked_until).toLocaleTimeString(\"th-TH\", { hour: \"2-digit\", minute: \"2-digit\" }) + \" น.\" });\n    if (u.role !== \"admin\") {\n        const farm = (global.get(\"farms\") || []).find(f => f.id === u.farm_id);\n        if (!farm || !farm.active) return expired();\n    }\n    const secret = scf.openSecret(u.totp_secret);\n    if (!secret) return expired();\n    const code = String(b.code || \"\").trim();\n    let step = null, backupLeft = null;\n    if (/^[0-9\\s]{6,7}$/.test(code)) step = scf.verifyTotp(secret, code, u.totp_enabled ? u.totp_last_step : null);\n    else if (u.totp_enabled && Array.isArray(u.mfa_backup) && u.mfa_backup.includes(scf.hashBackup(code))) {\n        backupLeft = u.mfa_backup.filter(h => h !== scf.hashBackup(code));\n    }\n    if (step === null && backupLeft === null) {\n        const n = (u.failed_logins || 0) + 1, lock = n >= 5;\n        await scf.db.update(\"users\", \"id=eq.\" + u.id, { failed_logins: lock ? 0 : n, locked_until: lock ? new Date(Date.now() + 5 * 60000).toISOString() : null });\n        rec.n++; flow.set(ipKey, rec);\n        await audit(\"login_fail\", u, { reason: lock ? \"mfa_locked_now\" : \"mfa\", ip });\n        return scf.reply(msg, lock ? 423 : 401, { error: lock ? \"ใส่รหัสผิด 5 ครั้ง บัญชีถูกล็อก 5 นาที\" : \"รหัสยืนยันไม่ถูกต้อง (ดูรหัสล่าสุดในแอป แล้วลองใหม่)\", code: \"mfa\" });\n    }\n    const patch = { failed_logins: 0, locked_until: null, last_login: new Date().toISOString() };\n    if (step !== null) patch.totp_last_step = step;\n    if (backupLeft) patch.mfa_backup = backupLeft;\n    let backupCodes;\n    const setup = !u.totp_enabled;\n    if (setup) { const bc = scf.newBackupCodes(); patch.totp_enabled = true; patch.mfa_backup = bc.hashes; backupCodes = bc.codes; }\n    await scf.db.update(\"users\", \"id=eq.\" + u.id, patch);\n    const all = global.get(\"users\") || {};\n    if (all[u.id]) { all[u.id].totp_enabled = true; global.set(\"users\", all); }\n    await audit(\"login_ok\", u, { ip, mfa: backupLeft ? \"backup\" : \"totp\", mfa_setup: setup || undefined });\n    rec.n = 0; flow.set(ipKey, rec);\n    const view = Object.assign({}, u, { totp_enabled: true, coop_ids: (all[u.id] || {}).coop_ids || [] });\n    return scf.reply(msg, 200, { token: scf.signToken(u), expires_in: scf.TOKEN_TTL,\n        user: Object.assign(scf.publicUser(view), { perms: scf.permsOf(view) }),\n        backup_codes: backupCodes, backup_left: backupLeft ? backupLeft.length : undefined });\n} catch (e) {\n    node.error(\"mfa: \" + e.message);\n    return scf.errorReply(msg, e);\n}",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 160,
+        "wires": [
+            [
+                "scfhs002c"
+            ]
+        ]
+    }
+]

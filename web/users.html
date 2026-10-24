@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ผู้ใช้งานและสิทธิ์ · Smart Chicken Farm</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d71f26'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle'%3E%F0%9F%90%94%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body class="page-users">
+<div class="app">
+<aside class="side" id="side"></aside>
+<div class="content">
+<main>
+  <div class="title"><div><h2 id="uTitle">ผู้ใช้งานและสิทธิ์</h2><span id="uCount"></span></div></div>
+  <p class="intro" id="uIntro" hidden>ผู้ดูแลโรงเรือนดูและสั่งงานได้เฉพาะโรงเรือนที่คุณเลือกให้ (สั่งไฟ ตั้งเวลาไฟ ลงไก่/จบรุ่น บันทึกประจำวัน) · เพิ่ม แก้ไข หรือลบได้ที่นี่</p>
+  <div class="alert warn" id="noKeeper" hidden><i data-ic="alert"></i><div><b>ฟาร์มที่ยังไม่มีผู้ดูแลฟาร์ม</b><span id="noKeeperList"></span></div></div>
+  <div class="alert info" id="noCaretaker" hidden><i data-ic="barn"></i><div><b>โรงเรือนที่ยังไม่มีผู้ดูแลโรงเรือน</b><span id="noCaretakerList"></span></div></div>
+  <div class="panel">
+    <div class="tools"><div class="seg" id="scope"><button data-all="0" class="act">ฟาร์มนี้</button><button data-all="1">ทุกฟาร์ม</button></div>
+      <div class="push btn-row"><button class="btn primary sm" id="qKeeper" hidden><i data-ic="plus"></i>เพิ่มผู้ดูแลฟาร์ม</button>
+        <button class="btn primary sm" id="qCk"><i data-ic="plus"></i>เพิ่มผู้ดูแลโรงเรือน</button>
+        <button class="btn sm" id="uAdd" hidden><i data-ic="plus"></i>เพิ่มผู้ใช้อื่น</button></div></div>
+    <div class="scroll"><table>
+      <thead><tr><th>ผู้ใช้</th><th>บทบาท</th><th>ฟาร์ม</th><th>โรงเรือนที่ดูแล</th><th>สถานะ</th><th>เข้าระบบล่าสุด</th><th></th></tr></thead>
+      <tbody id="uBody"><tr><td colspan="7" class="empty">กำลังโหลด...</td></tr></tbody></table></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h3>สิทธิ์ของแต่ละบทบาท</h3><span class="hint">ผู้ใช้ที่ไม่ใช่ผู้ดูแลระบบ เข้าได้เพียง 1 ฟาร์มที่ตัวเองสังกัด · ระบบตรวจสิทธิ์ทุกคำสั่งที่เซิร์ฟเวอร์</span></div>
+    <div class="scroll"><table class="matrix" id="matrix"></table></div>
+  </div>
+</main>
+<footer id="footer"></footer>
+</div>
+</div>
+<script type="module" src="js/pages/users.js"></script>
+</body>
+</html>

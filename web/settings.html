@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รุ่นไก่และเวลาไฟ · Smart Chicken Farm</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d71f26'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle'%3E%F0%9F%90%94%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body class="page-settings">
+<div class="app">
+<aside class="side" id="side"></aside>
+<div class="content">
+<main>
+  <div class="title"><div><h2>รุ่นไก่และเวลาไฟ</h2><span>ลงไก่รุ่นใหม่ จบรุ่น และตั้งเวลาไฟของแต่ละโรงเรือน</span></div></div>
+  <div id="coopsSettings" class="settings"></div>
+  <div class="panel ref">
+    <div class="panel-head"><h3>เป้าหมายอุณหภูมิตามอายุไก่เนื้อ</h3><span class="hint">ระบบใช้ตารางนี้ปรับเกณฑ์แจ้งเตือนให้เองทุกวัน (ยอมรับได้ ±3 °C)</span></div>
+    <div class="ref-row">
+      <div><b>32°</b><span>วันแรก</span></div><div><b>29°</b><span>7 วัน</span></div><div><b>27°</b><span>14 วัน</span></div>
+      <div><b>25°</b><span>21 วัน</span></div><div><b>23°</b><span>28 วัน</span></div><div><b>21°</b><span>35 วัน</span></div><div><b>20°</b><span>42 วัน+</span></div>
+    </div>
+    <p class="hint">ความชื้นที่เหมาะสม: สัปดาห์แรก 60–70 % หลังจากนั้น 50–70 %</p>
+  </div>
+</main>
+<footer id="footer"></footer>
+</div>
+</div>
+<script type="module" src="js/pages/settings.js"></script>
+</body>
+</html>
